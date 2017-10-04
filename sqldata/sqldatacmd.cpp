@@ -1790,13 +1790,13 @@ void SqlDataCmd::PrintHowToUse()
 	printf("\n\nExample:");
 	printf("\n\nTransfer table cities from Oracle to SQL Server");
 #if defined(WIN32) || defined(_WIN64)
-	printf("\n\n   sqldata.exe -sd=oracle,scott/tiger@orcl -td=sql,trusted@srv1.hr -t=cities");
+	printf("\n\n   sqldata.exe -sd=oracle,scott/tiger@orcl -td=sql,trusted@srv1,hr -t=cities");
 	printf("\n");
 	printf("\nRun sqldata_w.exe to launch a GUI version of SQLData.\n");
 	printf("\nPress any key to continue...\n");
 	_getch();
 #else
-	printf("\n\n   ./sqldata -sd=oracle,scott/tiger@orcl -td=sql,trusted@srv1.hr -t=cities");
+	printf("\n\n   ./sqldata -sd=oracle,scott/tiger@orcl -td=sql,trusted@srv1,hr -t=cities");
 	printf("\n\n");
 #endif
 }
