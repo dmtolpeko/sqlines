@@ -9208,32 +9208,9 @@ bool SqlParser::ParseFunctionReturns(Token *function)
 		ParseDataType(data_type, SQL_SCOPE_FUNC_PARAMS);
 	}
 	else
-	// RETURNS in SQL Server, DB2, PostgreSQL, MySQL, Informix
-	if(_source != SQL_INFORMIX && Token::Compare(returns, "RETURNS", L"RETURNS", 7) == true)
-	{
-		// Change to RETURN in Oracle
-		if(_target == SQL_ORACLE)
-			Token::Change(returns, "RETURN", L"RETURN", 6);
-
-		// Return data type
-		Token *data_type = GetNextToken();
-
-		// Check for 'void' data type in PostgreSQL meaning stored procedure
-		if(Token::Compare(data_type, "VOID", L"VOID", 4) == true)
-		{
-			// If not PostgreSQL convert to procedure and remove return clause
-			if(_target != SQL_POSTGRESQL)
-			{
-				Token::Change(function, "PROCEDURE", L"PROCEDURE", 9);
-				Token::Remove(returns, data_type);
-			}
-		}
-		else
-			ParseDataType(data_type, SQL_SCOPE_FUNC_PARAMS);
-	}
-	else
 	// RETURNS or RETURNING in Informix
-	if(Token::Compare(returns, "RETURNING", L"RETURNING", 9) == true)
+	if(Token::Compare(returns, "RETURNING", L"RETURNING", 9) == true ||
+	   Token::Compare(returns, "RETURNS", L"RETURNS", 7) == true )
 	{
 		_spl_returns = returns;
 
