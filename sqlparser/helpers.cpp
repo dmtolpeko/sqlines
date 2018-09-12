@@ -662,8 +662,9 @@ void SqlParser::ConvertSchemaName(Token *token, TokenStr &ident, size_t *len)
 	else
 	// dbo. in SQL Server, Sybase ASE
 	if(Source(SQL_SQL_SERVER, SQL_SYBASE) && !Target(SQL_SQL_SERVER, SQL_SYBASE) && 
-		(schema.Compare("[dbo].", L"[dbo].", 6) == true || schema.Compare("dbo.", L"dbo.", 4) == true))
+		(schema.Compare("[dbo].", L"[dbo].", 6) == true || schema.Compare("dbo.", L"dbo.", 4) == true)) {
 		schema.Clear();		
+	}
 	else
 	// Remove `` in MySQL
 	if(_source == SQL_MYSQL && _target != SQL_MYSQL)
@@ -697,7 +698,6 @@ void SqlParser::ConvertSchemaName(Token *token, TokenStr &ident, size_t *len)
 	// dba. in Sybase ASA
 	if(_source == SQL_SYBASE_ASA && _target != SQL_SYBASE_ASA && schema.Compare("dba.", L"dba.", 4) == true)
 		schema.Clear();		
-
 	ident.Append(schema);
 }
 

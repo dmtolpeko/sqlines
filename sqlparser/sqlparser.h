@@ -851,6 +851,7 @@ public:
 	bool ParseSelectStatement(Token *token, int block_scope, int select_scope, int *result_sets, Token **list_end, ListW *exp_starts, ListW *out_cols, ListW *into_cols, int *appended_subquery_aliases, Token **from_end, Token **where_end);
 	bool ParseSelectExpressionPattern(Token *open, Token *select); 
 	bool ParseSetStatement(Token *set);
+	bool ParseSetUserStatement(Token *setuser);
 	bool ParseSetOptions(Token *set);
 	bool ParseShowStatement(Token *show);
 	bool ParseSignalStatement(Token *signal);
@@ -1374,6 +1375,8 @@ public:
 
 	// Sybase specific functions
 	bool ParseSybaseAdsStorageClause();
+	bool ParseSybaseStorageClause();
+	bool ParseSybaseCreateIndexOptions();	
 	bool ParseSybaseExecuteProcedureStatement(Token *execute);
 	bool ParseSybaseWhileFetchStatement(Token *while_, Token *fetch, int scope);
 

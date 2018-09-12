@@ -124,3 +124,41 @@ bool SqlParser::ParseSybaseWhileFetchStatement(Token *while_, Token *fetch, int 
 
 	return true;
 }
+
+
+// SYBASE ASE CREATE INDEX storage options
+bool SqlParser::ParseSybaseCreateIndexOptions()
+{
+	bool exists = false;
+
+	while(true)
+	{
+		Token *next = GetNextToken();
+
+		if(next == NULL)
+			break;
+
+		// SYBASE ON <SEGMENT> option
+		if(next->Compare("ON", L"ON", 2) == true)
+		{
+			Token *value = GetNextToken();			
+
+			if(value != NULL)
+			{
+				if(_target != SQL_SYBASE)
+					Token::Remove(next, value);
+
+				exists = true;
+				continue;
+			}
+		}
+		
+		// Not an index clause
+		PushBack(next);
+
+		break;
+	}
+	return exists;
+}
+
+
