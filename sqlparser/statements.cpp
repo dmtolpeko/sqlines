@@ -1688,6 +1688,7 @@ bool SqlParser::ParseCreateIndex(Token *create, Token *unique, Token *index)
 		cr_table_end->distributed_by = true;
 	}
 
+	SqlServerAddStmtDelimiter();
 	return true;
 }
 
@@ -7323,7 +7324,7 @@ bool SqlParser::ParsePrintStatement(Token *print)
 	ParseExpression(exp);
 
 	// Comment for MySQL + POSTGRES
-	if(Target(SQL_MARIADB, SQL_MYSQL, SQL_POSTGRES))
+	if(Target(SQL_MARIADB, SQL_MYSQL, SQL_POSTGRESQL))
 		Comment(print, Nvl(GetNext(';', L';'), GetNext('GO', L'GO'), GetLastToken()));
 
 	return true;
