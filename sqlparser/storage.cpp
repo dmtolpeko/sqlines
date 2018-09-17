@@ -188,6 +188,9 @@ bool SqlParser::ParseStorageClause(Token *table_name, Token **id_start, Token **
 	if(_source == SQL_SQL_SERVER && ParseSqlServerStorageClause() == true)
 		return true;
 
+	if(_source == SQL_SYBASE && ParseSybaseStorageClause() == true)
+		return true;
+
 	if(_source == SQL_MYSQL && ParseMysqlStorageClause(table_name, id_start, comment) == true)
 		return true;
 
@@ -245,6 +248,92 @@ bool SqlParser::ParseSqlServerStorageClause()
 
 	return exists;
 }
+
+// Parse SYBASE CREATE TABLE storage clause
+bool SqlParser::ParseSybaseStorageClause()
+{
+	bool exists = false;
+
+	while(true)
+	{
+		Token *next = GetNext();
+
+		if(next == NULL)
+			break;
+
+		// ON filegroup_name
+		if(next->Compare("ON", L"ON", 2) == true)
+		{
+			// File group name
+			Token *name = GetNext();
+			
+			if(_target != SQL_SYBASE)
+			{
+				Token::Remove(next, name);
+			}
+
+			exists = true;
+		} else
+		// LOCK ALLPAGES
+		if(next->Compare("LOCK", L"LOCK", 4) == true)
+		{
+			// ALLPAGES or DATAPAGES
+			Token *pagetype = GetNextToken();
+
+			if(_target != SQL_SYBASE) {
+				Token::Remove(next, pagetype);
+			}
+
+			exists = true;
+			continue;
+		} else
+		// WITH
+		if(next->Compare("WITH", L"WITH", 4) == true)
+		{
+			Token *type = GetNext();
+			// ONLY Support IDENTITY_GAP for now
+			Token *creation = GetNextWordToken("IDENTITY_GAP", L"IDENTITY_GAP", 11);
+			Token *equal = GetNextCharToken('=', L'=');
+			Token *value = GetNextToken();
+
+			if(_target != SQL_SYBASE && type != NULL) {				
+				Token::Remove(next, value);
+			}
+
+			exists = true;
+			continue;
+		} else
+		// PARTITION BY SCHEME
+		if(next->Compare("PARTITION", L"PARTITION", 9) == true)
+		{
+			Token *by = GetNextWordToken("BY", L"BY", 2);
+			// Only support roundrobin
+			Token *strategy = GetNextWordToken(by, "ROUNDROBIN", L"ROUNDROBIN", 10);
+
+			// Partition by strategy
+			if(strategy != NULL)
+			{
+				Token *num = GetNextToken(strategy);
+
+				if(_target != SQL_SYBASE)
+				{
+					Token::Remove(next, num);
+				}
+
+				exists = true;
+				continue;
+			}
+		}
+		else
+		{
+			PushBack(next);
+			break;
+		}
+	}
+
+	return exists;
+}
+
 
 // Parse MySQL CREATE TABLE storage clause
 bool SqlParser::ParseMysqlStorageClause(Token *table_name, Token **id_start, Token **comment_out)
@@ -1065,6 +1154,9 @@ bool SqlParser::ParseCreateIndexOptions()
 		return true;
 
 	if(ParseDb2CreateIndexOptions() == true)
+		return true;
+
+	if(ParseSybaseCreateIndexOptions() == true)
 		return true;
 
 	return false;

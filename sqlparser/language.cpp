@@ -232,10 +232,19 @@ void SqlParser::ConvertObjectIdentifier(Token *token, int scope)
 	// Get the number of parts in quailified identifier
 	int parts = GetIdentPartsCount(token);
 
+
 	// Object contains a schema
-	if(parts > 1)
-		ConvertSchemaName(token, ident, &len);
-	else
+	if(parts > 1) {
+		// Sybase can have <db>.<schema>.<id>
+		if(Source(SQL_SYBASE) && parts == 3 && _target != SQL_SYBASE) {
+		    ConvertIdentRemoveLeadingPart(token);
+		    TokenStr schema;
+		    schema.Set(token->t_str, token->t_wstr, token->t_len);
+			ident.Append(schema);
+			return;
+		} else
+			ConvertSchemaName(token, ident, &len);
+	} else
 	// Set explicit schema if defined by the option
 	if(!_option_set_explicit_schema.empty())
 	{
@@ -1700,7 +1709,7 @@ bool SqlParser::ParseKeyConstraint(Token * /*alter*/, Token *table_name, Token *
 			nonclustered = GetNext("NONCLUSTERED", L"NONCLUSTERED", 12);
 
 		// Remove for other databases
-		if(_target != SQL_SQL_SERVER)
+		if(_target != SQL_SQL_SERVER || _target != SQL_SYBASE)
 		{
 			Token::Remove(clustered);
 			Token::Remove(nonclustered);
@@ -1875,6 +1884,17 @@ bool SqlParser::ParseKeyIndexOptions()
 			// Remove for other databases
 			if(_target != SQL_ORACLE)
 				Token::Remove(next);
+
+			exists = true;
+			continue;
+		}
+		// Sybase ON
+		if(next->Compare("ON", L"ON", 2) == true)
+		{
+			Token *segment = GetNextToken();
+			// Remove for other databases
+			if(_target != SQL_SYBASE)
+				Token::Remove(next,segment);
 
 			exists = true;
 			continue;

@@ -124,3 +124,66 @@ bool SqlParser::ParseSybaseWhileFetchStatement(Token *while_, Token *fetch, int 
 
 	return true;
 }
+
+
+// SYBASE ASE CREATE INDEX storage options
+bool SqlParser::ParseSybaseCreateIndexOptions()
+{
+	bool exists = false;
+
+	while(true)
+	{
+		Token *next = GetNextToken();
+
+		if(next == NULL)
+			break;
+
+		// SYBASE WITH options
+		if(next->Compare("WITH", L"WITH", 4) == true)			
+		{
+			Token *keyword = GetNextToken();
+			if(keyword->Compare("MAX_ROWS_PER_PAGE", L"MAX_ROWS_PER_PAGE", 17) == true) {
+				Token *set = GetNextToken();
+
+				/*Token *equal */ (void) GetNext(set, '=', L'=');
+
+				// Row count
+				Token *rows = GetNext(set);
+
+				if(_target != SQL_SYBASE)
+					Token::Remove(next, rows);
+				exists = true;
+				continue;						
+			} else if (keyword->Compare("ALLOW_DUP_ROW", L"ALLOW_DUP_ROW", 13) == true) {
+				if(_target != SQL_SYBASE)
+					Token::Remove(next, keyword);
+				exists = true;
+				continue;
+			}
+		}
+
+		// SYBASE ON <SEGMENT> option
+		if(next->Compare("ON", L"ON", 2) == true)
+		{
+			Token *value = GetNextToken();			
+
+			if(value != NULL)
+			{
+				if(_target != SQL_SYBASE)
+					Token::Remove(next, value);
+
+				exists = true;
+				continue;
+			}
+		}
+
+
+		// Not an index clause
+		PushBack(next);
+
+		break;
+	}
+	return exists;
+}
+
+

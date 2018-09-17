@@ -268,6 +268,10 @@ bool SqlParser::ParseStatement(Token *token, int scope, int *result_sets)
 	if(token->Compare("SET", L"SET", 3) == true)
 		exists = ParseSetStatement(token);
 	else
+	// SETUSER statement
+	if(token->Compare("SETUSER", L"SETUSER", 7) == true)
+		exists = ParseSetUserStatement(token);
+	else
 	// SHOW statement
 	if(token->Compare("SHOW", L"SHOW", 4) == true)
 		exists = ParseShowStatement(token);
@@ -448,6 +452,16 @@ bool SqlParser::ParseCreateStatement(Token *create, int *result_sets, bool *proc
 	{
 		next = GetNextToken();
 	}
+
+	// SYBASE CLUSTERED INDEX can follow unique
+	if(Token::Compare(next, "CLUSTERED", L"CLUSTERED", 9) == true || Token::Compare(next, "NONCLUSTERED", L"NONCLUSTERED", 12) == true)
+	{
+		if(_target != SQL_SYBASE)
+			Token::Remove(next, true);
+
+		next = GetNextToken();
+	}
+
 
 	// FORCE VIEW in Oracle can follow OR REPLACE
 	if(Token::Compare(next, "FORCE", L"FORCE", 5) == true)
@@ -1674,6 +1688,7 @@ bool SqlParser::ParseCreateIndex(Token *create, Token *unique, Token *index)
 		cr_table_end->distributed_by = true;
 	}
 
+	SqlServerAddStmtDelimiter();
 	return true;
 }
 
@@ -6600,6 +6615,13 @@ bool SqlParser::ParseGrantStatement(Token *grant)
 			if(_target == SQL_POSTGRESQL)
 				Token::Change(name, "PLPGSQL", L"PLPGSQL", 7);
 		}
+	} else
+	// INSERT/SELECT/UPDATE ON in Informix, PostgreSQL, Sybase ASE
+	if(priv->Compare("INSERT", L"INSERT", 6) == true || priv->Compare("SELECT", L"SELECT", 6) || priv->Compare("UPDATE", L"UPDATE", 6) || priv->Compare("DELETE", L"DELETE", 6))
+	{
+		Token *on = GetNextWordToken("ON", L"ON", 2);		
+		if(on != NULL)
+		/*Token *name */ (void) GetNextIdentToken(SQL_IDENT_OBJECT);		
 	}
 
 	// TO grantee
@@ -7301,9 +7323,9 @@ bool SqlParser::ParsePrintStatement(Token *print)
 
 	ParseExpression(exp);
 
-	// Comment for MySQL
-	if(Target(SQL_MARIADB, SQL_MYSQL))
-		Comment(print, Nvl(GetNext(';', L';'), GetLastToken()));
+	// Comment for MySQL + POSTGRES
+	if(Target(SQL_MARIADB, SQL_MYSQL, SQL_POSTGRESQL))
+		Comment(print, Nvl(GetNext(';', L';'), GetNext('GO', L'GO'), GetLastToken()));
 
 	return true;
 }
@@ -8089,6 +8111,31 @@ bool SqlParser::ParseSetStatement(Token *set)
 	return true;
 }
 
+// SYBASE setuser
+bool SqlParser::ParseSetUserStatement(Token *setuser)
+{
+	if(setuser == NULL)
+		return false;
+
+    STMS_STATS(setuser);
+
+	// User name
+	Token *user = GetNextIdentToken();
+
+	if(user == NULL)
+		return false;
+
+	// Postgres does not support use
+	if(_target == SQL_POSTGRESQL)
+		Comment(setuser, user);
+
+	// Handle GO after the statement in SQL Server
+	SqlServerGoDelimiter();
+
+	return true;
+}
+
+
 // Various SET options such as SET ISOLATION ...
 bool SqlParser::ParseSetOptions(Token *set)
 {
@@ -8555,6 +8602,10 @@ bool SqlParser::ParseUseStatement(Token *use)
 	// ALTER SESSION SET CURRENT_SCHEMA = name in Oracle
 	if(_target == SQL_ORACLE)
 		Token::Change(use, "ALTER SESSION SET CURRENT_SCHEMA =", L"ALTER SESSION SET CURRENT_SCHEMA =", 34);
+
+	// Postgres does not support use
+	if(_target == SQL_POSTGRESQL)
+		Comment(use, name);
 
 	// Handle GO after the statement in SQL Server
 	SqlServerGoDelimiter();
