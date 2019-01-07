@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <algorithm>
 #include "sqlapibase.h"
-#include "str.h"
+#include "../sqlcommon/str.h"
 
 bool SqlApiBase::_static_init = false;
 
@@ -383,8 +383,8 @@ void SqlApiBase::GetSelectionCriteria(const char *selection_template, const char
 			table = table_template;
 		}
 
-		char *s_ast = strchr((char*)schema.c_str(), '*');
-		char *t_ast = strchr((char*)table.c_str(), '*');
+		const char *s_ast = strchr(schema.c_str(), '*');
+		const char *t_ast = strchr(table.c_str(), '*');
 
 		std::replace(schema.begin(), schema.end(), '*', '%');
 		std::replace(table.begin(), table.end(), '*', '%');
@@ -560,7 +560,7 @@ void SqlApiBase::InitSession()
         sscanf(value, "%d", &num);
 
         if(num > 0)
-            _batch_max_rows = (size_t)num;		
+            _batch_max_rows = num;		
 	}
 
 	num = 0;

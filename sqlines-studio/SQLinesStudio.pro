@@ -5,6 +5,7 @@
 #-------------------------------------------------
 
 QT       += core gui
+QT       += widgets 
 
 TARGET = sqlines-studio
 TEMPLATE = app
@@ -15,16 +16,16 @@ SOURCES += main.cpp\
     aboutdialog.cpp \
     options.cpp \
     scripttab.cpp \
-    str.cpp \
-    file.cpp \
+    ../sqlcommon/str.cpp \
+    ../sqlcommon/file.cpp \
     highlighter.cpp
 
 HEADERS  += mainwindow.h \
     aboutdialog.h \
     options.h \
     scripttab.h \
-    str.h \
-    file.h \
+    ../sqlcommon/str.h \
+    ../sqlcommon/file.h \
     highlighter.h
 
 FORMS    += mainwindow.ui \

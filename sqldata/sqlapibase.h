@@ -21,9 +21,9 @@
 
 #include <string>
 #include <list>
-#include "parameters.h"
-#include "applog.h"
-#include "file.h"
+#include "../sqlcommon/parameters.h"
+#include "../sqlcommon/applog.h"
+#include "../sqlcommon/file.h"
 
 // Error codes
 #define SQL_DBAPI_UNKNOWN_ERROR			    -1
@@ -62,9 +62,9 @@ struct SqlCol
 	int _native_fetch_dt;
 
 	// Column length in bytes for string and binary strings
-	size_t _len;
+	long _len;
 	// Column length in bytes for bound data (one element in array)
-	size_t _fetch_len;
+	long _fetch_len;
 
 	// Precision and scale for numeric data types (scale also specifies fraction for TIMESTAMP)
 	int _precision;
@@ -87,7 +87,7 @@ struct SqlCol
 
 	// NULL and length indicator for ODBC (4-byte for 32-bit Windows, and 8-byte for 64-bit Windows)
 	// size_t is 32-bit on 32-bit Windows and 64-bit on 64-bit Windows
-	size_t *ind;
+	long *ind;
 
 	// 2-byte length indicators for Oracle OCI
 	short *_len_ind2;
@@ -196,8 +196,8 @@ struct SqlDataTypeMap
 	std::string name;
 
     // Source data type range
-    int len_min;
-    int len_max;
+ 	long len_min;
+ 	long len_max;
     int scale_min;
     int scale_max;
 
@@ -439,9 +439,9 @@ protected:
 	int _subtype;
 
 	// Number of columns in open cursor
-	size_t _cursor_cols_count;
+	long _cursor_cols_count;
 	// Number of allocated rows for cursor
-	size_t _cursor_allocated_rows;
+	long _cursor_allocated_rows;
 	// Column describtions and data
 	SqlCol *_cursor_cols;
 	// A LOB column exists in the cursor
@@ -450,13 +450,13 @@ protected:
 	bool _cursor_fetch_lob_as_varchar;
 
 	// Number of columns for bulk insert
-	size_t _ins_cols_count;
+	long _ins_cols_count;
 	// Number of allocated rows for bulk insert
-	size_t _ins_allocated_rows;
+	long _ins_allocated_rows;
 	// Column describtions and data
 	SqlCol *_ins_cols;
 	// Total number of already inserted rows
-	int _ins_all_rows_inserted;
+	long _ins_all_rows_inserted;
 
 	// Catalog information
 	std::list<SqlColMeta> _table_columns;
@@ -502,7 +502,7 @@ protected:
 	AppLog *_log;
 
 	// The maximum number of rows in read/write batch, by default it is defined by the buffer size divided by the table row size
-	size_t _batch_max_rows;
+	int _batch_max_rows;
 
     // Fixed size buffer to read LOB values by binding not reading by parts (can cause truncation error if the buffer is less than
     // the maximum LOB value, default is to read LOBs by separate calls
@@ -546,30 +546,30 @@ public:
 	virtual void Deallocate() {}
 
 	// Get row count for the specified object
-	virtual int GetRowCount(const char *object, int *count, size_t *time_spent) = 0;
+	virtual int GetRowCount(const char *object, long *count, size_t *time_spent) = 0;
 	
 	// Execute the statement and get scalar result
-	virtual int ExecuteScalar(const char *query, int *result, size_t *time_spent) = 0;
+	virtual int ExecuteScalar(const char *query, long *result, size_t *time_spent) = 0;
 
 	// Execute the statement
 	virtual int ExecuteNonQuery(const char *query, size_t *time_spent) = 0;
 
 	// Open cursor and allocate buffers
-	virtual int OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query = false,
+	virtual int OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query = false,
         std::list<SqlDataTypeMap> *dtmap = NULL) = 0;
 
 	// Fetch next portion of data to allocate buffers
-	virtual int Fetch(int *rows_fetched, size_t *time_spent) = 0;
+	virtual int Fetch(long *rows_fetched, size_t *time_spent) = 0;
 
 	// Close the cursor and deallocate buffers
 	virtual int CloseCursor() = 0;
 
 	// Initialize the bulk copy from one database into another
-	virtual int InitBulkTransfer(const char *table, size_t col_count, size_t allocated_array_rows, SqlCol *s_cols, SqlCol **t_cols) = 0;
+	virtual int InitBulkTransfer(const char *table, long col_count, long allocated_array_rows, SqlCol *s_cols, SqlCol **t_cols) = 0;
 
 	// Transfer rows between databases
-	virtual int TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+	virtual int TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 		size_t *time_spent) = 0;
 
 	// Specifies whether API allows to parallel reading from this API and write to another API
@@ -592,14 +592,14 @@ public:
 	virtual int DropReferencesChild(const char* /*table*/, size_t * /*time_spent*/, int * /*keys*/) { return -1; }
 
 	// Get the length of LOB column in the open cursor
-	virtual int GetLobLength(size_t row, size_t column, size_t *length) = 0;
+	virtual int GetLobLength(long row, long column, long *length) = 0;
 	// Allocate the buffer to read the LOB value depending on character lengths
-	virtual char* GetLobBuffer(size_t /*row*/, size_t /*column*/, size_t /*length*/, size_t * /*alloc_len*/) { return NULL; }
+	virtual char* GetLobBuffer(long /*row*/, long /*column*/, long /*length*/, long * /*alloc_len*/) { return NULL; }
 	virtual void FreeLobBuffer(char * /*buf*/) { return; }
 	// Get LOB content
-	virtual int GetLobContent(size_t row, size_t column, void *data, size_t length, int *len_ind) = 0;
+	virtual int GetLobContent(long row, long column, void *data, long length, long *len_ind) = 0;
 	// Get partial LOB content
-	virtual int GetLobPart(size_t row, size_t column, void *data, size_t length, int *len_ind) = 0;
+	virtual int GetLobPart(long row, long column, void *data, long length, long *len_ind) = 0;
 
 	// Get the list of available tables
 	virtual int GetAvailableTables(std::string &table_template, std::string &exclude, 

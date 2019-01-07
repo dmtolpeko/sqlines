@@ -35,8 +35,8 @@
 #include "sqldb2api.h"
 #include "sqlodbcapi.h"
 #include "sqlstdapi.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 // Constructor
 SqlDb::SqlDb()
@@ -748,8 +748,8 @@ int SqlDb::TransferRows(SqlDataReply &reply, int options, bool create_tables, bo
 	else
 		select = reply.s_sql_l;
 
-	size_t col_count = 0, allocated_array_rows = 0;
-	int rows_fetched = 0, rows_written = 0;
+	long col_count = 0, allocated_array_rows = 0;
+	long rows_fetched = 0, rows_written = 0;
 	int all_rows_read = 0, all_rows_written = 0;
 	
 	size_t bytes_written = 0;
@@ -761,7 +761,7 @@ int SqlDb::TransferRows(SqlDataReply &reply, int options, bool create_tables, bo
 	SqlCol *s_cols = NULL, *s_cols_copy = NULL, *cur_cols = NULL, *t_cols = NULL;
 
 	bool no_more_data = false;
-	size_t buffer_rows = 0;
+	long buffer_rows = 0;
 
 	// Fetch only one row to get cursor definition when no data transferred
 	if(!data)
@@ -1037,9 +1037,9 @@ int SqlDb::AssessRows(SqlDataReply &reply)
 
 	//select = "select well_te from afmss.well_remarks where well_rmks_id=100827";
 
-	size_t col_count = 0, allocated_array_rows = 0;
-	int rows_fetched = 0;
-	int all_rows_read = 0;
+	long col_count = 0, allocated_array_rows = 0;
+	long rows_fetched = 0;
+	long all_rows_read = 0;
 	__int64 all_bytes_read = 0;
 	
 	size_t time_read = 0, all_time_read = 0;
@@ -1658,9 +1658,9 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		}
 		else
 		// Oracle NUMBER as DECIMAL
-		if((source_type == SQLDATA_ORACLE && s_cols[i]._native_dt == SQLT_NUM ||
-			source_type == SQLDATA_ODBC && source_subtype == SQLDATA_ORACLE && s_cols[i]._native_dt == SQL_DECIMAL) &&
-			((s_cols[i]._precision >= 10 && s_cols[i]._precision <= 38) || s_cols[i]._scale != 0) ||
+		if((((source_type == SQLDATA_ORACLE && s_cols[i]._native_dt == SQLT_NUM) ||
+			(source_type == SQLDATA_ODBC && source_subtype == SQLDATA_ORACLE && s_cols[i]._native_dt == SQL_DECIMAL)) &&
+			((s_cols[i]._precision >= 10 && s_cols[i]._precision <= 38) || s_cols[i]._scale != 0)) ||
 			// Sybase ASE NUMERIC and DECIMAL
 			(source_type == SQLDATA_SYBASE && (s_cols[i]._native_dt == CS_NUMERIC_TYPE || s_cols[i]._native_dt == CS_DECIMAL_TYPE)) ||
 			// SQL Server, DB2, Informix, Sybase ASA DECIMAL/NUMERIC
@@ -2388,14 +2388,14 @@ bool SqlDb::IsSpecialIdentifier(const char *name)
 }
 
 // Copy column definitions and buffers
-int SqlDb::CopyColumns(SqlCol *cols, SqlCol **cols_copy, size_t col_count, size_t allocated_array_rows)
+int SqlDb::CopyColumns(SqlCol *cols, SqlCol **cols_copy, long col_count, long allocated_array_rows)
 {
 	if(cols == NULL || cols_copy == NULL || col_count <= 0 || allocated_array_rows <= 0)
 		return -1;
 
 	SqlCol *cols_c = new SqlCol[col_count];
 		
-	for(int i = 0; i < col_count; i++)
+	for(long i = 0; i < col_count; i++)
 	{
 		// Copy column metadata
 		cols_c[i] = cols[i];
@@ -2407,7 +2407,7 @@ int SqlDb::CopyColumns(SqlCol *cols, SqlCol **cols_copy, size_t col_count, size_
 			cols_c[i]._ind2 = new short[allocated_array_rows];
 
 		if(cols[i].ind != NULL)
-			cols_c[i].ind = new size_t[allocated_array_rows];
+			cols_c[i].ind = new long[allocated_array_rows];
 
 		if(cols[i]._len_ind2 != NULL)
 			cols_c[i]._len_ind2 = new short[allocated_array_rows];
@@ -2422,12 +2422,12 @@ int SqlDb::CopyColumns(SqlCol *cols, SqlCol **cols_copy, size_t col_count, size_
 }
 
 // Copy data
-int	SqlDb::CopyColumnData(SqlCol *s_cols, SqlCol *t_cols, size_t col_count, int rows_fetched)
+int	SqlDb::CopyColumnData(SqlCol *s_cols, SqlCol *t_cols, long col_count, long rows_fetched)
 {
 	if(s_cols == NULL || t_cols == NULL || col_count <= 0 || rows_fetched <= 0)
 		return -1;
 
-	for(int i = 0; i < col_count; i++)
+	for(long i = 0; i < col_count; i++)
 	{
 		// Copy data
 		memcpy(t_cols[i]._data, s_cols[i]._data, s_cols[i]._fetch_len * rows_fetched);
@@ -2537,17 +2537,17 @@ int SqlDb::ValidateRows(SqlDataReply &reply)
 	SqlCol *s_cols = (SqlCol*)_source_ca._void2;
 	SqlCol *t_cols = (SqlCol*)_target_ca._void2;
 
-	int s_col_count = _source_ca._int1;
-	int t_col_count = _target_ca._int1;
+	long s_col_count = _source_ca._int1;
+	long t_col_count = _target_ca._int1;
 
-	int s_alloc_rows = _source_ca._int2;
-	int t_alloc_rows = _target_ca._int2;
+	long s_alloc_rows = _source_ca._int2;
+	long t_alloc_rows = _target_ca._int2;
 
-	int s_fetched_rows = _source_ca._int3;
-	int t_fetched_rows = _target_ca._int3;
+	long s_fetched_rows = _source_ca._int3;
+	long t_fetched_rows = _target_ca._int3;
 
-	int s_all_fetched_rows = 0;
-	int t_all_fetched_rows = 0;
+	long s_all_fetched_rows = 0;
+	long t_all_fetched_rows = 0;
 
 	__int64 s_all_bytes = 0;
 	__int64 t_all_bytes = 0;
@@ -2569,7 +2569,7 @@ int SqlDb::ValidateRows(SqlDataReply &reply)
 			break;
 		}
 
-		int s_bytes = 0, t_bytes = 0;
+		long s_bytes = 0, t_bytes = 0;
 
 		// Compare content in the buffers
 		not_equal_rows = ValidateCompareRows(s_cols, t_cols, s_col_count, &s_bytes, t_col_count, s_fetched_rows, 
@@ -2671,8 +2671,8 @@ int SqlDb::ValidateRows(SqlDataReply &reply)
 }
 
 // Compare data in rows
-int SqlDb::ValidateCompareRows(SqlCol *s_cols, SqlCol *t_cols, int s_col_count, int *s_bytes, int t_col_count, 
-									int s_rows, int t_rows, int *t_bytes, int running_rows, int running_not_equal_rows)
+int SqlDb::ValidateCompareRows(SqlCol *s_cols, SqlCol *t_cols, long s_col_count, long *s_bytes, long t_col_count, 
+									long s_rows, long t_rows, long *t_bytes, long running_rows, long running_not_equal_rows)
 {
 	if(s_cols == NULL || t_cols == NULL || s_col_count == 0 || t_col_count == 0)
 		return -1;
@@ -2880,8 +2880,11 @@ bool SqlDb::ValidateCompareNumbers(SqlCol *s_col, const char *s_string, int s_le
 		// Get double values
 		sprintf(f1, "%%%dlf", s_len);
 		sprintf(f2, "%%%dlf", t_len);
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wformat-nonliteral"
 		sscanf(s_string, f1, &d1);
 		sscanf(t_string, f2, &d2);
+		#pragma clang diagnostic pop
 
 		if(d1 == d2)
 		{
@@ -2907,8 +2910,8 @@ bool SqlDb::ValidateCompareDatetimes(SqlCol *s_col, const char *s_string, int s_
 	int comp = -1;
 
 	// Oracle TIMESTAMP compared with MySQL DATETIME without fraction
-	if((source_type == SQLDATA_ORACLE && s_col->_native_dt == SQLT_TIMESTAMP) ||
-		(source_type == SQLDATA_SYBASE && (s_col->_native_dt == CS_DATETIME_TYPE || s_col->_native_dt == CS_DATETIME4_TYPE || s_col->_native_dt == CS_DATE_TYPE))
+	if(((source_type == SQLDATA_ORACLE && s_col->_native_dt == SQLT_TIMESTAMP) ||
+		(source_type == SQLDATA_SYBASE && (s_col->_native_dt == CS_DATETIME_TYPE || s_col->_native_dt == CS_DATETIME4_TYPE || s_col->_native_dt == CS_DATE_TYPE)))
 		&& (target_type == SQLDATA_MYSQL))
 	{
 		int s_len_new = s_len;
@@ -3042,7 +3045,7 @@ bool SqlDb::ValidateCompareLobs(SqlCol *s_col, int s_len, SqlCol *t_col, int t_l
 }
 
 // Dump differences in column
-void SqlDb::ValidateDiffDump(SqlCol *s_col, SqlCol *t_col, int row, int s_len, int t_len, char *s_string, char *t_string)
+void SqlDb::ValidateDiffDump(SqlCol *s_col, SqlCol *t_col, long row, long s_len, long t_len, char *s_string, char *t_string)
 {
 	if(s_col == NULL || t_col == NULL)
 		return;
@@ -3060,7 +3063,7 @@ void SqlDb::ValidateDiffDump(SqlCol *s_col, SqlCol *t_col, int row, int s_len, i
 }
 
 // Dump column value
-void SqlDb::ValidateDiffDumpValue(int len, char *str)
+void SqlDb::ValidateDiffDumpValue(long len, char *str)
 {
 	if(len != -1) 
 	{
@@ -3077,7 +3080,7 @@ int SqlDb::GetColumnDataLen(SqlCol *cols, int row, int column, int db_type, SqlA
 	if(cols == NULL || db_api == NULL)
 		return -1;
 
-	size_t len = (size_t)-1;
+	long len = -1;
 
 	if(db_type == SQLDATA_ORACLE)
 	{
@@ -3883,11 +3886,11 @@ int SqlDb::StartWorker(SqlDbThreadCa *ca)
 		// Open cursor for data validation
 		if(ca->_cmd == SQLDATA_CMD_OPEN_CURSOR)
 		{
-			size_t col_count;
-			size_t allocated_rows;
+			long col_count;
+			long allocated_rows;
 
 			// Exact or less number of rows must be fetched 
-			ca->cmd_rc = (short)ca->db_api->OpenCursor((const char*)ca->_void1, (size_t)ca->_int4, 0, &col_count, &allocated_rows, 
+			ca->cmd_rc = (short)ca->db_api->OpenCursor((const char*)ca->_void1, ca->_int4, 0, &col_count, &allocated_rows, 
 					&ca->_int3, (SqlCol**)&ca->_void2, &ca->_time_spent);
 			ca->_int1 = (int)col_count;
 			ca->_int2 = (int)allocated_rows;
@@ -3962,7 +3965,7 @@ void* SqlDb::StartWorkerS(void *v_ca)
 		return NULL;
 #endif
 
-	int rc = ca->sqlDb->StartWorker(ca);
+	ca->sqlDb->StartWorker(ca);
 
 	delete ca->db_api;
 

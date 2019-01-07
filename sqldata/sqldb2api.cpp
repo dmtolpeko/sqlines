@@ -18,8 +18,8 @@
 
 #include <stdlib.h>
 #include "sqldb2api.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 // Oracle OCI, Sybase ASE, MySQL C definitions
 #include <oci.h>
@@ -188,7 +188,7 @@ int SqlDb2Api::Connect(size_t *time_spent)
 	SQLCHAR full_conn[1024];
 	SQLSMALLINT full_conn_out_len;
 	
-	rc = _SQLDriverConnect(_hdbc, NULL, (SQLCHAR*)conn.c_str(), SQL_NTS, full_conn, 1024, &full_conn_out_len, SQL_DRIVER_NOPROMPT);
+	rc = _SQLDriverConnect(_hdbc, NULL, reinterpret_cast<SQLCHAR*>(const_cast<char*>(conn.c_str())), SQL_NTS, full_conn, 1024, &full_conn_out_len, SQL_DRIVER_NOPROMPT);
 	
 	if(rc == SQL_ERROR)
 	{
@@ -239,7 +239,7 @@ void SqlDb2Api::Deallocate()
 }
 
 // Get row count for the specified object
-int SqlDb2Api::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlDb2Api::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -254,7 +254,7 @@ int SqlDb2Api::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlDb2Api::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlDb2Api::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	SQLHANDLE stmt;
 	int q_result = 0;
@@ -265,7 +265,7 @@ int SqlDb2Api::ExecuteScalar(const char *query, int *result, size_t *time_spent)
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -305,7 +305,7 @@ int SqlDb2Api::ExecuteNonQuery(const char *query, size_t *time_spent)
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -320,8 +320,8 @@ int SqlDb2Api::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlDb2Api::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool /*catalog_query*/, std::list<SqlDataTypeMap> * /*dtmap*/)
+int SqlDb2Api::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool /*catalog_query*/, std::list<SqlDataTypeMap> * /*dtmap*/)
 {
 	TRACE("DB2 API OpenCursor() Entered");
 	size_t start = GetTickCount();
@@ -330,7 +330,7 @@ int SqlDb2Api::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &_hstmt_cursor);
 
 	// Execute the query
-	rc = _SQLExecDirect(_hstmt_cursor, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(_hstmt_cursor, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -405,7 +405,7 @@ int SqlDb2Api::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	else
 	if(buffer_memory > 0)
 	{
-		size_t rows = buffer_memory/row_size;
+		long rows = buffer_memory/row_size;
 		_cursor_allocated_rows = rows > 0 ? rows : 1;
 	}	
 
@@ -560,7 +560,7 @@ int SqlDb2Api::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 		if(_cursor_cols[i]._data != NULL)
 		{
 			// Allocate indicators
-			_cursor_cols[i].ind = new size_t[_cursor_allocated_rows];
+			_cursor_cols[i].ind = new long[_cursor_allocated_rows];
 			// DB2 64-bit sets indicator only for lowest 4 bytes
 			memset(_cursor_cols[i].ind, 0, _cursor_allocated_rows * sizeof(size_t));
 
@@ -573,7 +573,7 @@ int SqlDb2Api::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	}
 
 	// Prepare array fetch
-	rc = _SQLSetStmtAttr(_hstmt_cursor, SQL_ATTR_ROW_ARRAY_SIZE, (SQLPOINTER)_cursor_allocated_rows, 0); 
+	rc = _SQLSetStmtAttr(_hstmt_cursor, SQL_ATTR_ROW_ARRAY_SIZE, reinterpret_cast<SQLPOINTER>(_cursor_allocated_rows), 0); 
 	rc = _SQLSetStmtAttr(_hstmt_cursor, SQL_ATTR_ROWS_FETCHED_PTR, &_cursor_fetched, 0);
 
 	// Perform initial fetch, return SQL_SUCCESS even if there are less rows than array size
@@ -602,7 +602,7 @@ int SqlDb2Api::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlDb2Api::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlDb2Api::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	if(_cursor_allocated_rows <= 0)
 		return -1;
@@ -655,7 +655,7 @@ int SqlDb2Api::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlDb2Api::InitBulkTransfer(const char *table, size_t col_count, size_t allocated_array_rows, SqlCol *s_cols, SqlCol ** /*t_cols*/)
+int SqlDb2Api::InitBulkTransfer(const char *table, long col_count, long allocated_array_rows, SqlCol *s_cols, SqlCol ** /*t_cols*/)
 {
 	// Set AUTOCOMMIT OFF
 	int rc = _SQLSetConnectAttr(_hdbc, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_OFF, 0);
@@ -673,7 +673,7 @@ int SqlDb2Api::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 
 	insert += ")";
 
-	rc = _SQLPrepare(_hstmt_insert, (SQLCHAR*)insert.c_str(), SQL_NTS);
+	rc = _SQLPrepare(_hstmt_insert, reinterpret_cast<SQLCHAR*>(const_cast<char*>(insert.c_str())), SQL_NTS);
 
 	if(rc == -1)
 	{
@@ -689,7 +689,7 @@ int SqlDb2Api::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 	rc = _SQLSetStmtAttr(_hstmt_insert, SQL_ATTR_PARAM_BIND_TYPE, SQL_PARAM_BIND_BY_COLUMN, 0);
 
 	// Specify the array size
-	rc = _SQLSetStmtAttr(_hstmt_insert, SQL_ATTR_PARAMSET_SIZE, (SQLPOINTER)allocated_array_rows, 0);
+	rc = _SQLSetStmtAttr(_hstmt_insert, SQL_ATTR_PARAMSET_SIZE, reinterpret_cast<SQLPOINTER>(allocated_array_rows), 0);
 
 	// Number of processed rows
 	rc = _SQLSetStmtAttr(_hstmt_insert, SQL_ATTR_PARAMS_PROCESSED_PTR, &_rows_processed, 0);
@@ -699,7 +699,7 @@ int SqlDb2Api::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 	_ins_cols = new SqlCol[col_count];
 
 	// Bind columns
-	for(int i = 0; i < col_count; i++)
+	for(long i = 0; i < col_count; i++)
 	{
 		// Check whether the source buffer bound
 		if(s_cols[i]._data == NULL)
@@ -725,7 +725,7 @@ int SqlDb2Api::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 			(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_CHAR_TYPE))
 		{
 			// Allocate space for NULL/length indicators
-			_ins_cols[i].ind = new size_t[allocated_array_rows];
+			_ins_cols[i].ind = new long[allocated_array_rows];
 
 			// Bind data buffer directly
 			rc = _SQLBindParameter(_hstmt_insert, (SQLUSMALLINT)(i + 1), SQL_PARAM_INPUT, SQL_C_CHAR, SQL_CHAR, 
@@ -744,7 +744,7 @@ int SqlDb2Api::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 		// Sybase INT
 		if(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_INT_TYPE)
 		{
-			_ins_cols[i].ind = new size_t[allocated_array_rows];
+			_ins_cols[i].ind = new long[allocated_array_rows];
 
 			// Bind data buffer directly
 			rc = _SQLBindParameter(_hstmt_insert, (SQLUSMALLINT)(i + 1), SQL_PARAM_INPUT, SQL_C_LONG, SQL_INTEGER, 
@@ -763,7 +763,7 @@ int SqlDb2Api::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 		// Sybase SMALLINT
 		if(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_SMALLINT_TYPE)
 		{
-			_ins_cols[i].ind = new size_t[allocated_array_rows];
+			_ins_cols[i].ind = new long[allocated_array_rows];
 
 			// Bind data buffer directly
 			rc = _SQLBindParameter(_hstmt_insert, (SQLUSMALLINT)(i + 1), SQL_PARAM_INPUT, SQL_C_SHORT, SQL_SMALLINT, 
@@ -775,7 +775,7 @@ int SqlDb2Api::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 }
 
 // Transfer rows between databases
-int SqlDb2Api::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+int SqlDb2Api::TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 							size_t *time_spent)
 {
 	size_t start = GetTickCount();
@@ -787,10 +787,10 @@ int SqlDb2Api::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 
 	// Reset the array size for last portion
 	if(rows_fetched != _ins_allocated_rows)
-		rc = _SQLSetStmtAttr(_hstmt_insert, SQL_ATTR_PARAMSET_SIZE, (SQLPOINTER)rows_fetched, 0);
+		rc = _SQLSetStmtAttr(_hstmt_insert, SQL_ATTR_PARAMSET_SIZE, reinterpret_cast<SQLPOINTER>(rows_fetched), 0);
 
 	// Prepare buffers and calculate data size
-	for(int i = 0; i < rows_fetched; i++)
+	for(long i = 0; i < rows_fetched; i++)
 	{
 		for(int k = 0; k < _ins_cols_count; k++)
 		{
@@ -807,11 +807,11 @@ int SqlDb2Api::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 				// Copy indicators and calculate size for non-NULL values
 				if(s_cols[k]._ind2[i] != -1)
 				{
-					_ins_cols[k].ind[i] = (size_t)s_cols[k]._len_ind2[i];
+					_ins_cols[k].ind[i] = s_cols[k]._len_ind2[i];
 					bytes += s_cols[k]._len_ind2[i];
 				}
 				else
-					_ins_cols[k].ind[i] = (size_t)-1;
+					_ins_cols[k].ind[i] = -1;
 			}
 			else
 			if(_source_api_type == SQLDATA_SYBASE)
@@ -819,11 +819,11 @@ int SqlDb2Api::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 				// Copy indicators and calculate size for non-NULL values
 				if(s_cols[k]._ind2[i] != -1)
 				{
-					_ins_cols[k].ind[i] = (size_t)s_cols[k]._len_ind4[i];
+					_ins_cols[k].ind[i] = s_cols[k]._len_ind4[i];
 					bytes += s_cols[k]._len_ind4[i];
 				}
 				else
-					_ins_cols[k].ind[i] = (size_t)-1;
+					_ins_cols[k].ind[i] = -1;
 			}
 		}
 	}
@@ -903,19 +903,19 @@ int SqlDb2Api::DropReferences(const char*  /*table*/, size_t * /*time_spent*/)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlDb2Api::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlDb2Api::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlDb2Api::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlDb2Api::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }
 
 // Get partial LOB content
-int SqlDb2Api::GetLobPart(size_t /*row*/, size_t /*column*/, void* /*data*/, size_t /*length*/, int* /*len_ind*/)
+int SqlDb2Api::GetLobPart(long /*row*/, long /*column*/, void* /*data*/, long /*length*/, long* /*len_ind*/)
 {
 	/*int rc = SQLGetData(_hstmt_cursor, (SQLUSMALLINT)(column + 1), SQL_C_BINARY, data, (SQLLEN)length, (SQLLEN*)len_ind);
 
@@ -961,10 +961,10 @@ int SqlDb2Api::GetAvailableTables(std::string &table_template, std::string & /*e
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query.c_str(), SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query.c_str())), SQL_NTS);
 
 	if(rc < 0)
-		rc = _SQLExecDirect(stmt, (SQLCHAR*)query2.c_str(), SQL_NTS);
+		rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query2.c_str())), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -1037,9 +1037,9 @@ int SqlDb2Api::ReadTableConstraints(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1146,9 +1146,9 @@ int SqlDb2Api::ReadConstraintColumns(std::string &condition)
 	
 	query += " ORDER BY t.tabschema, t.tabname, t.constname, t.colseq";
 		
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1293,9 +1293,9 @@ void SqlDb2Api::SetVersion()
 	// For DB2 8.x
 	std::string query2 = "SELECT versionnumber FROM SYSIBM.SYSVERSIONS";
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;

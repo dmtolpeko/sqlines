@@ -26,13 +26,12 @@
 #include <direct.h>
 #else
 #include <sys/stat.h>
+#ifdef __APPLE__
+#include <sys/uio.h>
+#else
 #include <sys/io.h>
+#endif
 #include <unistd.h>
-
-#define _read read
-#define _write write
-#define _close close
-
 #endif
 
 #include <stdlib.h>
@@ -40,8 +39,8 @@
 #include <errno.h>
 #include <string>
 #include "filelist.h"
-#include "file.h"
-#include "str.h"
+#include "../sqlcommon/file.h"
+#include "../sqlcommon/str.h"
 
 // Constructor
 FileList::FileList()
@@ -217,7 +216,7 @@ int	FileList::FindFiles(std::string dir, std::string file, std::list<std::string
 			while(fgets(fileName, 1024, file))
 			{
 				// Remove new line from path, otherwise stat() will fail
-				int len = strlen(fileName);
+				size_t len = strlen(fileName);
 				if(len && fileName[len-1] == '\n')
 					fileName[len-1] = '\x0'; 
 

@@ -1,8 +1,9 @@
-#include <QtGui/QApplication>
+//#include <QtGui/QApplication>
+#include <QtWidgets/QApplication>
 #include <QString>
 #include <string>
 #include "mainwindow.h"
-#include "sqldata.h"
+#include "../sqldata/sqldata.h"
 
 int main(int argc, char *argv[])
 {

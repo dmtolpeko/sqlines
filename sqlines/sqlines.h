@@ -18,8 +18,8 @@
 #define sqlines_sqlines_h
 
 #include <string>
-#include "applog.h"
-#include "parameters.h"
+#include "../sqlcommon/applog.h"
+#include "../sqlcommon/parameters.h"
 
 #define SQLINES_VERSION             "SQLines 3.1.73 - SQL Conversion Tool."
 #define SQLINES_COPYRIGHT           "Copyright (c) 2017 SQLines. All Rights Reserved."
@@ -60,7 +60,7 @@ class Sqlines
     void *_parser;
 
     // Total number of files
-    int _total_files;
+    size_t _total_files;
 
     // Command line parameters
     Parameters _parameters;
@@ -69,6 +69,7 @@ class Sqlines
 
 public:
     Sqlines();
+    ~Sqlines();
 
     // Run the tool with command line parameters
     int Run(int argc, char** argv);
@@ -79,7 +80,7 @@ private:
 
     int ProcessFiles();
     int ProcessStdin();
-    int ProcessFile(std::string &file, std::string &out_file, int *in_size, int *in_lines);
+    int ProcessFile(std::string &file, std::string &out_file, int64_t *in_size, int64_t *in_lines);
 
     // Get output name of the file
     std::string GetOutFileName(std::string &input, std::string &relative_name);

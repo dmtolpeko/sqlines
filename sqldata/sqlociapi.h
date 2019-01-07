@@ -44,7 +44,7 @@ typedef sword (*OCIBindByPosFunc)(OCIStmt *stmtp, OCIBind **bindpp, OCIError *er
 typedef sword (*OCIDefineByPosFunc)(OCIStmt *, OCIDefine **, OCIError *, ub4, dvoid *, sb4, ub2, dvoid *, ub2 *, ub2 *, ub4);
 typedef sword (*OCIDescriptorAllocFunc)(void *, void **, ub4, size_t, void **);
 typedef sword (*OCIDescriptorFreeFunc)(void *, ub4);
-typedef sword (*OCIEnvCreateFunc)(OCIEnv **envhpp, ub4 mode, CONST dvoid *ctxp, CONST dvoid *(*malocfp)(dvoid *ctxp, size_t size), CONST dvoid *(*ralocfp)(dvoid *ctxp, dvoid *memptr, size_t newsize), CONST void (*mfreefp)(dvoid *ctxp, dvoid *memptr), size_t xtramemsz, dvoid **usrmempp);
+typedef sword (*OCIEnvCreateFunc)(OCIEnv **envhpp, ub4 mode, CONST dvoid *ctxp, CONST dvoid *(*malocfp)(dvoid *ctxp, size_t size), CONST dvoid *(*ralocfp)(dvoid *ctxp, dvoid *memptr, size_t newsize), void (*mfreefp)(dvoid *ctxp, dvoid *memptr), size_t xtramemsz, dvoid **usrmempp);
 typedef sword (*OCIErrorGetFunc)(dvoid *, ub4, text *, sb4 *, text *, ub4, ub4);
 typedef sword (*OCIHandleAllocFunc)(void *, void **, ub4, size_t, void **);
 typedef sword (*OCIHandleFreeFunc)(dvoid *, ub4);
@@ -117,30 +117,30 @@ public:
 	virtual void Deallocate();
 
 	// Get row count for the specified object
-	virtual int GetRowCount(const char *object, int *count, size_t *time_spent);
+	virtual int GetRowCount(const char *object, long *count, size_t *time_spent);
 
 	// Execute the statement and get scalar result
-	virtual int ExecuteScalar(const char *query, int *result, size_t *time_spent);
+	virtual int ExecuteScalar(const char *query, long *result, size_t *time_spent);
 
 	// Execute the statement
 	virtual int ExecuteNonQuery(const char *query, size_t *time_spent);
 
 	// Open cursor and allocate buffers
-	virtual int OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query = false,
+	virtual int OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query = false,
         std::list<SqlDataTypeMap> *dtmap = NULL);
 
 	// Fetch next portion of data to allocate buffers
-	virtual int Fetch(int *rows_fetched, size_t *time_spent);
+	virtual int Fetch(long *rows_fetched, size_t *time_spent);
 
 	// Close the cursor and deallocate buffers
 	virtual int CloseCursor();
 
 	// Initialize the bulk copy from one database into another
-	virtual int InitBulkTransfer(const char *table, size_t col_count, size_t allocated_array_rows, SqlCol *s_cols, SqlCol **t_cols);
+	virtual int InitBulkTransfer(const char *table, long col_count, long allocated_array_rows, SqlCol *s_cols, SqlCol **t_cols);
 
 	// Transfer rows between databases
-	virtual int TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+	virtual int TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 			size_t *time_spent);
 
 	// Specifies whether API allows to parallel reading from this API and write to another API
@@ -163,14 +163,14 @@ public:
 	int DropReferencesChild(const char* table, size_t *time_spent, int *keys);
 
 	// Get the length of LOB column in the open cursor
-	virtual int GetLobLength(size_t row, size_t column, size_t *length);
+	virtual int GetLobLength(long row, long column, long *length);
 	// Allocate the buffer to read the LOB value depending on character lengths
-	char* GetLobBuffer(size_t row, size_t column, size_t length, size_t *alloc_len);
+	char* GetLobBuffer(long row, long column, long length, long *alloc_len);
 	void FreeLobBuffer(char *buf);
 	// Get LOB content
-	virtual int GetLobContent(size_t row, size_t column, void *data, size_t length, int *len_ind);
+	virtual int GetLobContent(long row, long column, void *data, long length, long *len_ind);
 	// Get partial LOB content
-	virtual int GetLobPart(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/) { return -1; }
+	virtual int GetLobPart(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/) { return -1; }
 
 	// Get the list of available tables
 	virtual int GetAvailableTables(std::string &select, std::string &exclude, std::list<std::string> &tables);

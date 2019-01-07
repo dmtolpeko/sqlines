@@ -65,16 +65,20 @@ public:
 	static int GetExtensionPosition(const char *path);
 
 	// Get the size of the file
-	static int GetFileSize(const char* file);
+	#if defined(WIN32) || defined(WIN64)
+	static __int64 GetFileSize(const char* file);
+	#else
+	static int64_t GetFileSize(const char* file);
+	#endif
 
 	// Get content of the file (without terminating with 'x0')
-	static int GetContent(const char* file, void *input, size_t len);
+	static int GetContent(const char* file, void *input, int64_t len);
 
 	// Get relative name
 	static std::string GetRelativeName(const char* base, const char *file);
     
    	// Write the buffer to the file
-    static int Write(const char *file, const char* content, size_t size);
+    static long Write(const char *file, const char* content, int64_t size);
 
 	// Create directories (supports nested directories)
 	static void CreateDirectories(const char *path);
@@ -82,7 +86,7 @@ public:
    	// Truncate the file (empty file will be created)
 	static int Truncate(const char *file);
 	// Append data to the existing file
-	static int Append(const char *file, const char *data, unsigned int len);
+	static long Append(const char *file, const char *data, int64_t len);
 };
 
 #endif // sqlines_file_h

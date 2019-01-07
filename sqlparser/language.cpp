@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "sqlparser.h"
-#include "str.h"
+#include "../sqlcommon/str.h"
 #include "cobol.h"
 
 // Convert an identifier
@@ -97,7 +97,7 @@ void SqlParser::ConvertIdentifier(Token *token, int type, int scope)
 	if(_source == SQL_POSTGRESQL)
 	{
 		TokenStr ident;
-		size_t len = 0;
+		int64_t len = 0;
 
 		// Get number of parts in quailified identifier
 		int parts = GetIdentPartsCount(token);
@@ -133,7 +133,7 @@ void SqlParser::ConvertIdentifier(Token *token, int type, int scope)
 			*ident = '[';
 
 			// Copy the value within quotes
-			size_t i = 1;
+			int64_t i = 1;
 			for(i = 1; i < token->len - 1; i++)
 				ident[i] = cur[i];
 
@@ -152,10 +152,10 @@ void SqlParser::ConvertIdentifier(Token *token, int type, int scope)
 		{
 			char *ident = new char[token->len + 1];
 
-			size_t i = 0;
+			int64_t i = 0;
 
 			// Copy the value within quotes
-			for(size_t k = 1; k < token->len - 1; k++)
+			for(int64_t k = 1; k < token->len - 1; k++)
 			{
 				if(cur[k] != '[' && cur[k] != ']' && cur[k] != '`')
 				{
@@ -184,7 +184,7 @@ void SqlParser::ConvertIdentifier(Token *token, int type, int scope)
 			char close = (*cur == '[') ? ']' : *cur;
 
 			// Copy the value within quotes
-			size_t i = 1;
+			int64_t i = 1;
 			for(i = 1; i < token->len - 1; i++)
 			{
 				// Open or close quote is faced inside, can be qualified identifier
@@ -223,7 +223,7 @@ void SqlParser::ConvertObjectIdentifier(Token *token, int scope)
 		return;
 
 	TokenStr ident;
-	size_t len = 0;
+	int64_t len = 0;
 
 	// Package function or procedure, add a prefix
 	if(_spl_package != NULL && _target != SQL_ORACLE && (scope == SQL_SCOPE_FUNC || scope == SQL_SCOPE_PROC))
@@ -260,7 +260,7 @@ void SqlParser::ConvertColumnIdentifier(Token *token, int /*scope*/)
 		return;
 
 	TokenStr ident;
-	size_t len = 0;
+	int64_t len = 0;
 
 	// Get the number of parts in quailified identifier
 	int parts = GetIdentPartsCount(token);
@@ -294,7 +294,7 @@ void SqlParser::ConvertColumnIdentifierSingle(Token *token, int /*scope*/)
 	TokenStr ident;
     bool changed = false;
 
-    for(size_t i = 0; i < token->len; i++)
+    for(int64_t i = 0; i < token->len; i++)
     {
         // $ allowed in Teradata but not allowed in EsgynDB
         if(TOKEN_CMPCP(token, '$', i) == true)
@@ -485,7 +485,7 @@ bool SqlParser::ConvertTriggerNewOldColumn(Token *token)
 		{
 			TokenStr ident("@", L"@", 1);
 
-			size_t old_len = _spl_old_correlation_name->len;
+			int64_t old_len = _spl_old_correlation_name->len;
 
 			// Append OLD name _ and column name 
 			ident.Append(token, 0, old_len);
@@ -647,7 +647,7 @@ bool SqlParser::ConvertLocalTableColumn(Token *token)
 // Convert a procedure, function parameter
 void SqlParser::ConvertParameterIdentifier(Token *token)
 {
-	if(token == NULL && token->len > 0)
+	if((token == NULL) || ((token->str == NULL) && (token->len > 0)))
 		return;
 
 	// Convert @ to p_ for SQL Server, Sybase
@@ -692,7 +692,7 @@ void SqlParser::ConvertParameterIdentifier(Token *ref, Token *decl)
 // Convert a local variable
 void SqlParser::ConvertVariableIdentifier(Token *token)
 {
-	if(token == NULL && token->len > 0)
+	if((token == NULL) || ((token->str == NULL) && (token->len > 0)))
 		return;
 
 	// Check if a variable with this name already declared
@@ -747,7 +747,7 @@ bool SqlParser::ConvertTsqlVariable(Token *token)
 	*ident = 'v';
 
 	// Copy content except @
-	for(size_t i = 1; i < token->len; i++)
+	for(int64_t i = 1; i < token->len; i++)
 		ident[i] = cur[i];
 
 	ident[token->len] = 0;
@@ -775,11 +775,11 @@ bool SqlParser::ConvertToTsqlVariable(Token *name)
 
 	*ident = '@';
 
-	size_t len = name->len + 1;
-	size_t pos = 1;
+	int64_t len = name->len + 1;
+	int64_t pos = 1;
 
 	// Copy content after @
-	for(size_t i = 0; i < name->len; i++)
+	for(int64_t i = 0; i < name->len; i++)
 	{
 		// Check for a special character to be replaced by @ at first position rather than appended
 		if(i == 0 && cur[i] == '#')
@@ -805,7 +805,7 @@ bool SqlParser::ConvertOraclePseudoColumn(Token *token)
 	if(token == NULL)
 		return false;
 
-	size_t len = token->len;
+	int64_t len = token->len;
 
 	// .nextval reference
 	if(len > 8 && token->Compare(".nextval", L".nextval", len - 8, 8) == true)
@@ -1744,7 +1744,7 @@ bool SqlParser::ParseKeyConstraint(Token * /*alter*/, Token *table_name, Token *
 			pkcols.Add(col);
 
 		// For Greenplum, add column to DISTRIBUTED BY in CREATE TABLE
-		if(greenplum_distributed == true)
+		if(greenplum_distributed == true && cr_table_end != NULL)
 		{
 			if(count > 0)
 				Append(cr_table_end->book, ", ", L", ", 2);
@@ -2139,10 +2139,10 @@ bool SqlParser::ParseExpression(Token *first, int prev_operator)
 		}
 		else
 		{
-			ParseExpression(next);
-
-			// Propagate data type from expression to (
-			first->data_type = next->data_type;			
+			if(ParseExpression(next)) {
+				// Propagate data type from expression to (
+				first->data_type = next->data_type;	
+			}		
 		}
 
 		// Next should be )
@@ -3009,6 +3009,8 @@ bool SqlParser::ParseMultiplicationOperator(Token *first)
 // Addition operator +
 bool SqlParser::ParseAdditionOperator(Token *first, int prev_operator)
 {
+	bool string_concat = false;
+
 	if(first == NULL)
 		return false;
 	
@@ -3023,11 +3025,6 @@ bool SqlParser::ParseAdditionOperator(Token *first, int prev_operator)
 
 	if(second == NULL)
 		return false;
-
-	// Parse the second and other expressions recursively
-	ParseExpression(second, SQL_OPERATOR_PLUS);
-
-	Token *second_end = GetLastToken();
 
 	// In SQL Server, Sybase + is also used to concatenate strings
 	if(Source(SQL_SQL_SERVER, SQL_SYBASE) == true)
@@ -3067,7 +3064,21 @@ bool SqlParser::ParseAdditionOperator(Token *first, int prev_operator)
 
 		if(not_num1 == true && not_num2 == true)
 			string_concat = true;
+	}
 
+	if(string_concat == false) {
+		// Parse the second and other expressions recursively
+		ParseExpression(second, SQL_OPERATOR_PLUS);
+	} else {
+		// Parse the second and other expressions recursively
+		ParseExpression(second, SQL_OPERATOR_CONCAT);
+	}
+
+	Token *second_end = GetLastToken();
+
+	// In SQL Server, Sybase + is also used to concatenate strings
+	if(Source(SQL_SQL_SERVER, SQL_SYBASE) == true)
+	{
 		// String concatentation
 		if(string_concat == true)
 		{

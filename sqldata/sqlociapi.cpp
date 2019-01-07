@@ -18,8 +18,8 @@
 
 #include <stdio.h>
 #include "sqlociapi.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 // ODBC, Sybase CT-Lib, MySQL C definitions
 #include <sql.h>
@@ -245,7 +245,7 @@ int SqlOciApi::Connect(size_t *time_spent)
 	if(rc < 0)
 		return rc;
                    
-	rc = _ociServerAttach(_srvhp, _errhp, (text*)_db.c_str(), (sb4)_db.length(), 0);
+	rc = _ociServerAttach(_srvhp, _errhp, reinterpret_cast<text*>(const_cast<char*>(_db.c_str())), (sb4)_db.length(), 0);
 
 	if(rc < 0)
 	{
@@ -368,7 +368,7 @@ void SqlOciApi::Deallocate()
 }
 
 // Get row count for the specified object
-int SqlOciApi::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlOciApi::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -383,7 +383,7 @@ int SqlOciApi::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlOciApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlOciApi::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	if(query == NULL || _ociHandleAlloc == NULL || _ociStmtPrepare == NULL || _ociDefineByPos == NULL ||
 		_ociStmtExecute == NULL || _ociHandleFree == NULL)
@@ -398,7 +398,7 @@ int SqlOciApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
 	// Allocate a statement handle
 	int rc = _ociHandleAlloc((dvoid*)_envhp, (dvoid**)&stmtp, OCI_HTYPE_STMT, 0, NULL);
 
-	rc = _ociStmtPrepare(stmtp, _errhp, (text*)query, (ub4)strlen(query), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = _ociStmtPrepare(stmtp, _errhp, reinterpret_cast<text*>(const_cast<char*>(query)), (ub4)strlen(query), OCI_NTV_SYNTAX, OCI_DEFAULT);
 
 	rc = _ociDefineByPos(stmtp, &defnpp, _errhp, 1, &q_result, sizeof(int), SQLT_INT, NULL, NULL, NULL, OCI_DEFAULT);
 
@@ -433,7 +433,7 @@ int SqlOciApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 
 	int rc = _ociHandleAlloc((dvoid*)_envhp, (dvoid**)&stmtp, OCI_HTYPE_STMT, 0, NULL);
 
-	rc = _ociStmtPrepare(stmtp, _errhp, (text*)query, (ub4)strlen(query), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = _ociStmtPrepare(stmtp, _errhp, reinterpret_cast<text*>(const_cast<char*>(query)), (ub4)strlen(query), OCI_NTV_SYNTAX, OCI_DEFAULT);
 
 	// Execute the statement
 	rc = _ociStmtExecute(_svchp, stmtp, _errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
@@ -450,8 +450,8 @@ int SqlOciApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlOciApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> * /*dtmap*/)
+int SqlOciApi::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> * /*dtmap*/)
 {
 	if(query == NULL)
 		return -1;
@@ -463,7 +463,7 @@ int SqlOciApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	int rc = _ociHandleAlloc((dvoid*)_envhp, (dvoid**)&_stmtp_cursor, OCI_HTYPE_STMT, 0, NULL);
 
 	// Prepare the query
-	rc = _ociStmtPrepare(_stmtp_cursor, _errhp, (text*)query, (ub4)strlen(query), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = _ociStmtPrepare(_stmtp_cursor, _errhp, reinterpret_cast<text*>(const_cast<char*>(query)), (ub4)strlen(query), OCI_NTV_SYNTAX, OCI_DEFAULT);
 
 	// Execute the query
 	rc = _ociStmtExecute(_svchp, _stmtp_cursor, _errhp, 0, 0, NULL, NULL, OCI_DEFAULT);
@@ -516,7 +516,7 @@ int SqlOciApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 
 		// Check if length ratio applied for VARCHAR2 and CHAR columns
 		if((_cursor_cols[i]._native_dt == SQLT_CHR || _cursor_cols[i]._native_dt == SQLT_AFC) && _char_length_ratio != 0.0 && !catalog_query)
-			_cursor_cols[i]._len = _cursor_cols[i]._len * _char_length_ratio;
+			_cursor_cols[i]._len = long((_cursor_cols[i]._len * _char_length_ratio) + 0.5);
 
 		if(_cursor_cols[i]._native_dt == SQLT_BLOB || _cursor_cols[i]._native_dt == SQLT_CLOB)
 		{
@@ -788,7 +788,7 @@ int SqlOciApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlOciApi::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlOciApi::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	if(_ociStmtFetch2 == NULL || _ociAttrGet == NULL || _cursor_allocated_rows <= 0)
 		return -1;
@@ -859,7 +859,7 @@ bool SqlOciApi::CanParallelReadWrite()
 }
 
 // Get the length of LOB column in the open cursor 
-int SqlOciApi::GetLobLength(size_t row, size_t column, size_t *length)
+int SqlOciApi::GetLobLength(long row, long column, long *length)
 {
 	if(_cursor_cols == NULL || row >= _cursor_allocated_rows || column >=_cursor_cols_count || _ociLobGetLength2 == NULL)
 		return -1;
@@ -874,13 +874,13 @@ int SqlOciApi::GetLobLength(size_t row, size_t column, size_t *length)
 		SetError();
 
 	if(length != NULL)
-		*length = (size_t)len;
+		*length = len;
 
 	return rc;
 }
 
 // Allocate the buffer to read the LOB value depending on character lengths
-char* SqlOciApi::GetLobBuffer(size_t row, size_t column, size_t length, size_t *alloc_len) 
+char* SqlOciApi::GetLobBuffer(long row, long column, long length, long *alloc_len) 
 { 
 	if(_cursor_cols == NULL || row >= _cursor_allocated_rows || column >=_cursor_cols_count || length <= 0)
 		return NULL;
@@ -906,7 +906,7 @@ void SqlOciApi::FreeLobBuffer(char *buf)
 }
 
 // Get LOB content
-int SqlOciApi::GetLobContent(size_t row, size_t column, void *data, size_t length, int *len_ind)
+int SqlOciApi::GetLobContent(long row, long column, void *data, long length, long *len_ind)
 {
 	if(data == NULL || _cursor_cols == NULL || _cursor_cols_count <= column || _ociLobRead2 == NULL)
 		return -1;
@@ -992,7 +992,7 @@ int SqlOciApi::GetAvailableTables(std::string &select, std::string &exclude,
 	// Set prefetch count
 	rc = _ociAttrSet(stmtp, OCI_HTYPE_STMT, (void*)&prefetch_rows, sizeof(int), OCI_ATTR_PREFETCH_ROWS, _errhp);
 
-	rc = _ociStmtPrepare(stmtp, _errhp, (text*)query.c_str(), (ub4)query.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = _ociStmtPrepare(stmtp, _errhp, reinterpret_cast<text*>(const_cast<char*>(query.c_str())), (ub4)query.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
 
 	// Define the select list items 
 	rc = _ociDefineByPos(stmtp, &defnpp, _errhp, 1, (void*)owner, 31, SQLT_STR, (void*)owner_ind,
@@ -1114,9 +1114,9 @@ int SqlOciApi::ReadTableColumns(std::string &selection)
     size_t long_inplace_old = _bind_long_inplace;
 	_bind_long_inplace = 8000;
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1232,9 +1232,9 @@ int SqlOciApi::ReadTableConstraints(std::string &selection, const char *types)
     size_t long_inplace_old = _bind_long_inplace;
 	_bind_long_inplace = 8000;
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1386,9 +1386,9 @@ int SqlOciApi::ReadConstraintColumns(std::string &selection)
 
 	query += " ORDER BY owner, constraint_name, position";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1488,9 +1488,9 @@ int SqlOciApi::ReadConstraintTable(const char *schema, const char *constraint, s
 		query += "'";
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1549,9 +1549,9 @@ int SqlOciApi::ReadConstraintColumns(const char *schema, const char *table, cons
 
 	query += " ORDER BY position";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1612,9 +1612,9 @@ int SqlOciApi::ReadComments(std::string &selection)
 		query += selection;
 	}
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1716,9 +1716,9 @@ int SqlOciApi::ReadIndexes(std::string &selection)
 		query += selection;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1834,9 +1834,9 @@ int SqlOciApi::ReadIndColumns(std::string &selection)
 
 	query += " ORDER BY index_owner, index_name, column_position";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1929,9 +1929,9 @@ int SqlOciApi::ReadIndExpressions(std::string &selection)
     size_t long_inplace_old = _bind_long_inplace;
 	_bind_long_inplace = 8000;
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -2224,9 +2224,9 @@ int SqlOciApi::ReadSequences(std::string &selection)
 		query += seq_selection;
 	}
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -2478,7 +2478,7 @@ int SqlOciApi::ReadReservedWords()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allocated_array_rows, SqlCol *s_cols, SqlCol ** /*t_cols*/)
+int SqlOciApi::InitBulkTransfer(const char *table, long col_count, long allocated_array_rows, SqlCol *s_cols, SqlCol ** /*t_cols*/)
 {
 	TRACE("OCI InitBulkTransfer() Entered");
 	TRACE_P("Target table: %s", table);
@@ -2493,9 +2493,9 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 	char c[11]; *c = '\x0';
 
 	// Add parameter markers
-	for(int i = 0; i < col_count; i++)
+	for(long i = 0; i < col_count; i++)
 	{
-		sprintf(c, "%d", i + 1);
+		sprintf(c, "%ld", i + 1);
 
 		insert += (i > 0) ? ", :c" : ":c";
 		insert += c;
@@ -2504,7 +2504,7 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 	insert += ")";
 
 	// Prepare the insert
-	rc = _ociStmtPrepare(_stmtp_insert, _errhp, (text*)insert.c_str(), (ub4)insert.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = _ociStmtPrepare(_stmtp_insert, _errhp, reinterpret_cast<text*>(const_cast<char*>(insert.c_str())), (ub4)insert.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
 
 	if(rc != 0)
 	{
@@ -2552,13 +2552,13 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
         else
 		// CHAR
 		if( // ODBC SQL_LONGVARCHAR (CLOB) is read as SQL_C_CHAR, so skip it
-			s_cols[i]._lob == false &&
+			(s_cols[i]._lob == false) &&
 			// SQL Server, Informix, DB2 and Sybase ASA types fetched as CHAR
-			((_source_api_type == SQLDATA_SQL_SERVER || _source_api_type == SQLDATA_INFORMIX ||
+			(((_source_api_type == SQLDATA_SQL_SERVER || _source_api_type == SQLDATA_INFORMIX ||
 				_source_api_type == SQLDATA_DB2 || _source_api_type == SQLDATA_ASA)
 				&& (s_cols[i]._native_fetch_dt == SQL_C_CHAR || s_cols[i]._native_fetch_dt == SQL_C_WCHAR)) ||
 			// MySQL data types bound to string except TEXT and BLOB
-			(_source_api_type == SQLDATA_MYSQL && s_cols[i]._lob == false))
+			(_source_api_type == SQLDATA_MYSQL && s_cols[i]._lob == false)))
 		{
 			// Bind without terminating \x0, it fetched if SQL_C_CHAR but not included to fetched length 
 			_ins_cols[i]._native_dt = SQLT_AFC;
@@ -2566,13 +2566,13 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 		else
 		// VARBINARY
 		if( // ODBC SQL_LONGVARBINARY (BLOB) is read as SQL_C_BINARY, so skip it
-			s_cols[i]._lob == false &&
+			(s_cols[i]._lob == false) &&
 			// SQL Server, Informix, DB2 and Sybase ASA types fetched as BINARY
-			((_source_api_type == SQLDATA_SQL_SERVER || _source_api_type == SQLDATA_INFORMIX ||
+			(((_source_api_type == SQLDATA_SQL_SERVER || _source_api_type == SQLDATA_INFORMIX ||
 				_source_api_type == SQLDATA_DB2 || _source_api_type == SQLDATA_ASA)
 				&& s_cols[i]._native_fetch_dt == SQL_C_BINARY) ||
 				// Sybase ASE BINARY
-				(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_BINARY_TYPE))
+				(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_BINARY_TYPE)))
 		{
 			_ins_cols[i]._native_dt = SQLT_BIN;
  		}
@@ -2706,10 +2706,10 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 }
 
 // Transfer rows between databases
-int SqlOciApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+int SqlOciApi::TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 							size_t *time_spent)
 {
-	size_t bytes = 0;
+	long bytes = 0;
 	int rc = 0;
 
 	if(rows_fetched <= 0)
@@ -2718,7 +2718,7 @@ int SqlOciApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 	size_t start = GetTickCount();
 
 	// Prepare buffers and calculate data size
-	for(int i = 0; i < rows_fetched; i++)
+	for(long i = 0; i < rows_fetched; i++)
 	{
 		for(int k = 0; k < _ins_cols_count; k++)
 		{
@@ -2726,7 +2726,7 @@ int SqlOciApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 				_source_api_type == SQLDATA_INFORMIX || _source_api_type == SQLDATA_MYSQL ||
 				_source_api_type == SQLDATA_ASA)
 			{
-				size_t ind = (size_t)-1;
+				long ind = -1;
 
 				if(s_cols[k].ind != NULL)
 					ind = s_cols[k].ind[i];
@@ -2818,7 +2818,7 @@ int SqlOciApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 				// The previous LOB locator value must be truncated
 				rc = _ociLobTrim(_svchp, _errhp, loc, 0);
 				
-				size_t lob_size = 0;
+				long lob_size = 0;
 
 				bool more = true;
 
@@ -2829,17 +2829,17 @@ int SqlOciApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 					ub1 piece = OCI_ONE_PIECE;
 
 					// Check if the buffer fully filled (buffer is x0 terminated for CLOBs)
-					if(((_source_api_type == SQLDATA_INFORMIX &&
-						(s_cols[k]._native_dt == SQL_LONGVARCHAR || s_cols[k]._native_dt == -103) ||
+					if(((((_source_api_type == SQLDATA_INFORMIX) &&
+						(s_cols[k]._native_dt == SQL_LONGVARCHAR || s_cols[k]._native_dt == -103)) ||
 						// Sybase ASA LONG VARCHAR
 						(_source_api_type == SQLDATA_ASA && s_cols[k]._native_dt == SQL_LONGVARCHAR))
-						&& (size_t)s_cols[k].ind[i] == s_cols[k]._fetch_len - 1) ||
-					  // BLOB are not reminated with 0x
-					  ((_source_api_type == SQLDATA_INFORMIX &&
-						(s_cols[k]._native_dt == SQL_LONGVARBINARY || s_cols[k]._native_dt == -102) ||
+						&& (s_cols[k].ind[i] == s_cols[k]._fetch_len - 1)) ||
+					  // BLOB are not terminated with 0x
+					  ((((_source_api_type == SQLDATA_INFORMIX) &&
+						(s_cols[k]._native_dt == SQL_LONGVARBINARY || s_cols[k]._native_dt == -102)) ||
 						// Sybase ASA LONG VARBINARY
 						(_source_api_type == SQLDATA_ASA && s_cols[k]._native_dt == SQL_LONGVARBINARY))
-						&& (size_t)s_cols[k].ind[i] == s_cols[k]._fetch_len))
+						&& (s_cols[k].ind[i] == s_cols[k]._fetch_len)))
 					{
 						piece = (lob_size == 0) ? (ub1)OCI_FIRST_PIECE : (ub1)OCI_NEXT_PIECE;
 						ampt = 0;
@@ -3125,9 +3125,9 @@ void SqlOciApi::SetVersion()
 	// Oracle 11g R2 Express returns - Oracle Database 11g Express Edition Release 11.2.0.2.0 - Beta 
 	const char *query = "SELECT banner FROM v$version WHERE banner LIKE 'Oracle%'";
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;

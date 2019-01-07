@@ -18,8 +18,8 @@
 
 #include "sqlodbcapi.h"
 #include "sqlociapi.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 // Constructor
 SqlOdbcApi::SqlOdbcApi()
@@ -142,7 +142,7 @@ int SqlOdbcApi::Connect(size_t * /*time_spent*/)
 	SQLCHAR full_conn[1024];
 	SQLSMALLINT full_conn_out_len;
 	
-	rc = SQLDriverConnect(_hdbc, NULL, (SQLCHAR*)conn.c_str(), SQL_NTS, full_conn, 1024, &full_conn_out_len, SQL_DRIVER_NOPROMPT);
+	rc = SQLDriverConnect(_hdbc, NULL, reinterpret_cast<SQLCHAR*>(const_cast<char*>(conn.c_str())), SQL_NTS, full_conn, 1024, &full_conn_out_len, SQL_DRIVER_NOPROMPT);
 	
 	if(rc == SQL_ERROR)
 		SetError(SQL_HANDLE_DBC, _hdbc);
@@ -156,7 +156,7 @@ int SqlOdbcApi::Connect(size_t * /*time_spent*/)
 }
 
 // Get row count for the specified object
-int SqlOdbcApi::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlOdbcApi::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -172,7 +172,7 @@ int SqlOdbcApi::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlOdbcApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlOdbcApi::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	SQLHANDLE stmt;
 	int q_result = 0;
@@ -183,7 +183,7 @@ int SqlOdbcApi::ExecuteScalar(const char *query, int *result, size_t *time_spent
 	int rc = SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -223,7 +223,7 @@ int SqlOdbcApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 	int rc = SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -238,8 +238,8 @@ int SqlOdbcApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlOdbcApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool /*catalog_query*/, std::list<SqlDataTypeMap> * /*dtmap*/)
+int SqlOdbcApi::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool /*catalog_query*/, std::list<SqlDataTypeMap> * /*dtmap*/)
 {
 	size_t start = GetTickCount();
 
@@ -247,7 +247,7 @@ int SqlOdbcApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 	int rc = SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &_hstmt_cursor);
 
 	// Execute the query
-	rc = SQLExecDirect(_hstmt_cursor, (SQLCHAR*)query, SQL_NTS);
+	rc = SQLExecDirect(_hstmt_cursor, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -377,7 +377,7 @@ int SqlOdbcApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 		if(_cursor_cols[i]._data != NULL)
 		{
 			// Allocate indicators
-			_cursor_cols[i].ind = new size_t[_cursor_allocated_rows];
+			_cursor_cols[i].ind = new long[_cursor_allocated_rows];
 
 			rc = SQLBindCol(_hstmt_cursor, (SQLUSMALLINT)(i + 1), (SQLSMALLINT)_cursor_cols[i]._native_fetch_dt, _cursor_cols[i]._data, (SQLLEN)_cursor_cols[i]._fetch_len,
 								(SQLLEN*)_cursor_cols[i].ind);
@@ -413,7 +413,7 @@ int SqlOdbcApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlOdbcApi::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlOdbcApi::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	if(_cursor_allocated_rows <= 0)
 		return -1;
@@ -460,13 +460,13 @@ int SqlOdbcApi::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlOdbcApi::InitBulkTransfer(const char * /*table*/, size_t /*col_count*/, size_t /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
+int SqlOdbcApi::InitBulkTransfer(const char * /*table*/, long /*col_count*/, long /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
 {
 	return -1;
 }
 
 // Transfer rows between databases
-int SqlOdbcApi::TransferRows(SqlCol * /*s_cols*/, int /*rows_fetched*/, int * /*rows_written*/, size_t * /*bytes_written*/,
+int SqlOdbcApi::TransferRows(SqlCol * /*s_cols*/, long /*rows_fetched*/, long * /*rows_written*/, size_t * /*bytes_written*/,
 							size_t * /*time_spent*/)
 {
 	return -1;
@@ -506,19 +506,19 @@ int SqlOdbcApi::DropReferences(const char* /*table*/, size_t * /*time_spent*/)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlOdbcApi::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlOdbcApi::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlOdbcApi::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlOdbcApi::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }
 
 // Get partial LOB content
-int SqlOdbcApi::GetLobPart(size_t /*row*/, size_t column, void *data, size_t length, int *len_ind)
+int SqlOdbcApi::GetLobPart(long /*row*/, long column, void *data, long length, long *len_ind)
 {
 	SQLLEN ind;
 	int rc = SQLGetData(_hstmt_cursor, (SQLUSMALLINT)(column + 1), SQL_C_BINARY, data, (SQLLEN)length, &ind);
@@ -550,7 +550,7 @@ int SqlOdbcApi::GetAvailableTables(std::string &table_template, std::string & /*
 	int rc = SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = SQLExecDirect(stmt, (SQLCHAR*)query.c_str(), SQL_NTS);
+	rc = SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query.c_str())), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)

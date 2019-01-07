@@ -21,8 +21,8 @@
 #include "sqlociapi.h"
 #include "sqlmysqlapi.h"
 #include "sqlctapi.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 // Constructor
 SqlStdApi::SqlStdApi()
@@ -57,13 +57,13 @@ int SqlStdApi::Connect(size_t * /*time_spent*/)
 }
 
 // Get row count for the specified object
-int SqlStdApi::GetRowCount(const char* /*object*/, int* /*count*/, size_t* /*time_spent*/)
+int SqlStdApi::GetRowCount(const char* /*object*/, long* /*count*/, size_t* /*time_spent*/)
 {
 	return -1;
 }
 
 // Execute the statement and get scalar result
-int SqlStdApi::ExecuteScalar(const char* /*query*/, int* /*result*/, size_t* /*time_spent*/)
+int SqlStdApi::ExecuteScalar(const char* /*query*/, long* /*result*/, size_t* /*time_spent*/)
 {
 	return -1;
 }
@@ -75,14 +75,14 @@ int SqlStdApi::ExecuteNonQuery(const char* /*query*/, size_t* /*time_spent*/)
 }
 
 // Open cursor and allocate buffers
-int SqlStdApi::OpenCursor(const char* /*query*/, size_t /*buffer_rows*/, int /*buffer_memory*/, size_t* /*col_count*/, size_t* /*allocated_array_rows*/, 
-		int* /*rows_fetched*/, SqlCol** /*cols*/, size_t* /*time_spent*/, bool /*catalog_query*/, std::list<SqlDataTypeMap>* /*dtmap*/)
+int SqlStdApi::OpenCursor(const char* /*query*/, long /*buffer_rows*/, long /*buffer_memory*/, long* /*col_count*/, long* /*allocated_array_rows*/, 
+		long* /*rows_fetched*/, SqlCol** /*cols*/, size_t* /*time_spent*/, bool /*catalog_query*/, std::list<SqlDataTypeMap>* /*dtmap*/)
 {
 	return -1;
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlStdApi::Fetch(int* /*rows_fetched*/, size_t* /*time_spent*/) 
+int SqlStdApi::Fetch(long* /*rows_fetched*/, size_t* /*time_spent*/) 
 {
 	return -1;
 }
@@ -94,7 +94,7 @@ int SqlStdApi::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlStdApi::InitBulkTransfer(const char * /*table*/, size_t col_count, size_t allocated_array_rows, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
+int SqlStdApi::InitBulkTransfer(const char * /*table*/, long col_count, long allocated_array_rows, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
 {
 	_ins_cols_count = col_count;
 	_ins_allocated_rows = allocated_array_rows;
@@ -104,7 +104,7 @@ int SqlStdApi::InitBulkTransfer(const char * /*table*/, size_t col_count, size_t
 }
 
 // Transfer rows between databases
-int SqlStdApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+int SqlStdApi::TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 							size_t *time_spent)
 {
 	size_t bytes = 0;
@@ -116,16 +116,16 @@ int SqlStdApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 	size_t start = GetTickCount();
 
 	// Prepare buffers and calculate data size
-	for(int i = 0; i < rows_fetched; i++)
+	for(long i = 0; i < rows_fetched; i++)
 	{
-		for(int k = 0; k < _ins_cols_count; k++)
+		for(long k = 0; k < _ins_cols_count; k++)
 		{
 			// Output colum delimiter
 			if(k > 0)
 				printf("\t");	
 
 			// Length indicator
-			size_t ind = (size_t)-1;
+			long ind = -1;
 
 			if(_source_api_type == SQLDATA_DB2 || _source_api_type == SQLDATA_SQL_SERVER || 
 				_source_api_type == SQLDATA_INFORMIX || _source_api_type == SQLDATA_MYSQL ||
@@ -137,15 +137,15 @@ int SqlStdApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 #if defined(WIN64)
 				// DB2 11 64-bit CLI driver still writes indicators to 4-byte array
 				if(_source_api_type == SQLDATA_DB2 /*&& s_cols[k].ind[0] & 0xFFFFFFFF00000000*/)
-					ind = (size_t)((int*)(s_cols[k].ind))[i];
+					ind = ((int*)(s_cols[k].ind))[i];
 #endif
 			}
             else
 			if(_source_api_type == SQLDATA_ORACLE && s_cols[k]._ind2 != NULL && s_cols[k]._ind2[i] != -1)
-	            ind = (size_t)s_cols[k]._len_ind2[i];
+	            ind = s_cols[k]._len_ind2[i];
     		else
 			if(_source_api_type == SQLDATA_SYBASE && s_cols[k]._ind2 != NULL && s_cols[k]._ind2[i] != -1)
-				ind = (size_t)s_cols[k]._len_ind4[i];
+				ind = s_cols[k]._len_ind4[i];
 
 			// Calculate size for non-NULL values
 			if(ind != -1)
@@ -163,7 +163,8 @@ int SqlStdApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 							s_cols[k]._native_fetch_dt == SQL_C_CHAR))
 			{
 				char *data = s_cols[k]._data + s_cols[k]._fetch_len * i;
-				printf("%.*s", ind, data);				
+				int precision = static_cast<int>(ind);
+				printf("%.*s", precision, data);				
 			}	
 		}
 
@@ -210,19 +211,19 @@ int SqlStdApi::DropReferences(const char* /*table*/, size_t * /*time_spent*/)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlStdApi::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlStdApi::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlStdApi::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlStdApi::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }
 
 // Get partial LOB content
-int SqlStdApi::GetLobPart(size_t /*row*/, size_t /*column*/, void* /*data*/, size_t /*length*/, int* /*len_ind*/)
+int SqlStdApi::GetLobPart(long /*row*/, long /*column*/, void* /*data*/, long /*length*/, long* /*len_ind*/)
 {
 	return -1;
 }

@@ -1120,7 +1120,7 @@ void Cobol::ConvertIdentifier(Token *name, int type)
 		return;
 
 	const char *cur = name->str;
-	size_t new_len = name->len + 2;
+	int64_t new_len = name->len + 2;
 
 	char *ident = new char[new_len + 1];
 
@@ -1133,7 +1133,7 @@ void Cobol::ConvertIdentifier(Token *name, int type)
 	ident[1] = '_';
 
 	// Replace - with _
-	for(size_t i = 0; i < name->len; i++)
+	for(int64_t i = 0; i < name->len; i++)
 	{
 		if(cur[i] == '-')
 			ident[i + 2] = '_';
@@ -1234,7 +1234,7 @@ Token* Cobol::GetNextCharToken(const char ch, const wchar_t wch)
 		return NULL; 
 }
 
-Token* Cobol::GetNextWordToken(const char *str, const wchar_t *wstr, size_t len) 
+Token* Cobol::GetNextWordToken(const char *str, const wchar_t *wstr, int64_t len) 
 { 
 	if(_sqlparser != NULL) 
 		return _sqlparser->GetNextWordToken(str, wstr, len); 
@@ -1250,7 +1250,7 @@ Token* Cobol::GetNextUntilNewlineToken()
 		return NULL; 
 }
 
-Token* Cobol::Append(Token *token, const char *str, const wchar_t *wstr, size_t len, Token *format)
+Token* Cobol::Append(Token *token, const char *str, const wchar_t *wstr, int64_t len, Token *format)
 {
 	if(_sqlparser != NULL) 
 		return _sqlparser->Append(token, str, wstr, len, format);
@@ -1266,7 +1266,7 @@ Token* Cobol::AppendCopy(Token *token, Token *append)
 	return NULL;
 }
 
-Token* Cobol::Prepend(Token *token, const char *str, const wchar_t *wstr, size_t len, Token *format)
+Token* Cobol::Prepend(Token *token, const char *str, const wchar_t *wstr, int64_t len, Token *format)
 {
 	if(_sqlparser != NULL) 
 		return _sqlparser->Prepend(token, str, wstr, len, format);

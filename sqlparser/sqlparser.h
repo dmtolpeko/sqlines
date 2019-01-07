@@ -20,6 +20,7 @@
 #define sqlines_sqlparser_h
 
 #include <stdio.h>
+#include <stdint.h>
 #include <map>
 #include "token.h"
 #include "stats.h"
@@ -302,9 +303,9 @@ class SqlParser
 	// Currently converted input
 	const char *_start;
 	const char *_next_start;
-	int _size;
-	int _remain_size;
-	int _line;
+	int64_t _size;
+	int64_t _remain_size;
+	int64_t _line;
 
 	// Input tokens
 	ListT<Token> _tokens;
@@ -515,10 +516,10 @@ public:
 	void SetOption(const char *option, const char *value);
 
 	// Perform conversion
-	int Convert(const char *input, int size, const char **output, int *out_size, int *lines);
+	int Convert(const char *input, int64_t size, const char **output, int64_t *out_size, int64_t *lines);
 
 	// Generate output
-	void CreateOutputString(const char **output, int *out_size);
+	void CreateOutputString(const char **output, int64_t *out_size);
 
 	// Post conversion when all tokens processed
 	void Post();
@@ -531,10 +532,10 @@ public:
 	Token* GetNextCharToken(Token *prev, const char ch, const wchar_t wch);
 	Token* GetNextCharOrLastToken(const char ch, const wchar_t wch);
 	Token* GetNextPlusMinusAsOperatorToken(const char ch, const wchar_t wch);
-	Token* GetNextSpecialCharToken(Token *prev, const char *str, const wchar_t *wstr, size_t len);
-	Token* GetNextSpecialCharToken(const char *str, const wchar_t *wstr, size_t len);
-	Token* GetNextWordToken(const char *str, const wchar_t *wstr, size_t len);
-	Token* GetNextWordToken(Token *prev, const char *str, const wchar_t *wstr, size_t len);
+	Token* GetNextSpecialCharToken(Token *prev, const char *str, const wchar_t *wstr, int64_t len);
+	Token* GetNextSpecialCharToken(const char *str, const wchar_t *wstr, int64_t len);
+	Token* GetNextWordToken(const char *str, const wchar_t *wstr, int64_t len);
+	Token* GetNextWordToken(Token *prev, const char *str, const wchar_t *wstr, int64_t len);
 	Token* GetNextUntilNewlineToken();
 	Token* GetNextNumberToken();
 	Token* GetNextNumberToken(Token *prev);
@@ -548,8 +549,8 @@ public:
 
 	Token* GetNext() { return GetNextToken(); }
 	Token* GetNext(Token *prev) { return GetNextToken(prev); }
-	Token* GetNext(const char *str, const wchar_t *wstr, size_t len) { return GetNextWordToken(str, wstr, len); }
-	Token* GetNext(Token *prev, const char *str, const wchar_t *wstr, size_t len) { return GetNextWordToken(prev, str, wstr, len); }
+	Token* GetNext(const char *str, const wchar_t *wstr, int64_t len) { return GetNextWordToken(str, wstr, len); }
+	Token* GetNext(Token *prev, const char *str, const wchar_t *wstr, int64_t len) { return GetNextWordToken(prev, str, wstr, len); }
 	Token* GetNext(const char ch, const wchar_t wch) { return GetNextCharToken(ch, wch); }
 	Token* GetNext(Token *prev, const char ch, const wchar_t wch) { return GetNextCharToken(prev, ch, wch); }
 
@@ -563,34 +564,34 @@ public:
 	// Return the last fetched token to the input
 	void PushBack(Token *token);
 	// Check next token for the specific value but do not fecth it from the input
-	Token *LookNext(const char *str, const wchar_t *wstr, size_t len);
+	Token *LookNext(const char *str, const wchar_t *wstr, int64_t len);
 
 	// Append the token with the specified value
-	Token *Append(Token *token, const char *str, const wchar_t *wstr, size_t len, Token *format = NULL);
-    Token *AppendWithSpaceAfter(Token *token, const char *str, const wchar_t *wstr, size_t len, Token *format = NULL);
+	Token *Append(Token *token, const char *str, const wchar_t *wstr, int64_t len, Token *format = NULL);
+    Token *AppendWithSpaceAfter(Token *token, const char *str, const wchar_t *wstr, int64_t len, Token *format = NULL);
 	void Append(Token *token, int value);
 	void Append(Token *token, TokenStr *str, Token *format = NULL);
-    void AppendFirst(Token *token, const char *str, const wchar_t *wstr, size_t len, Token *format = NULL);
-	Token* AppendNoFormat(Token *token, const char *str, const wchar_t *wstr, size_t len);
+    void AppendFirst(Token *token, const char *str, const wchar_t *wstr, int64_t len, Token *format = NULL);
+	Token* AppendNoFormat(Token *token, const char *str, const wchar_t *wstr, int64_t len);
 	void AppendNoFormat(Token *token, TokenStr *str);
-	void AppendFirstNoFormat(Token *token, const char *str, const wchar_t *wstr, size_t len);
+	void AppendFirstNoFormat(Token *token, const char *str, const wchar_t *wstr, int64_t len);
 	Token* AppendCopy(Token *token, Token *append);
 	Token* AppendCopy(Token *token, Token *first, Token *last, bool append_removed = true);
 	void AppendSpaceCopy(Token *token, Token *append);
 	void AppendSpaceCopy(Token *token, Token *first, Token *last, bool append_removed = true);
-    void AppendNewlineCopy(Token *token, Token *first, Token *last, size_t newlines = 1, bool append_removed = true);
+    void AppendNewlineCopy(Token *token, Token *first, Token *last, int64_t newlines = 1, bool append_removed = true);
 	void Append(Token *token, Token *append);
 	
 	// Prepend the token with the specified value
-	Token* Prepend(Token *token, const char *str, const wchar_t *wstr, size_t len, Token *format = NULL);
-	Token* PrependNoFormat(Token *token, const char *str, const wchar_t *wstr, size_t len);
+	Token* Prepend(Token *token, const char *str, const wchar_t *wstr, int64_t len, Token *format = NULL);
+	Token* PrependNoFormat(Token *token, const char *str, const wchar_t *wstr, int64_t len);
 	Token* PrependNoFormat(Token *token, TokenStr *str);
 	Token* PrependCopy(Token *token, Token *prepend);
 	Token* PrependCopy(Token *token, Token *first, Token *last, bool prepend_removed = true);
 	void PrependSpaceCopy(Token *token, Token *first, Token *last, bool prepend_removed = true);
 	void Prepend(Token *token, Token *prepend);
 
-	void ChangeWithSpacesAround(Token *token, const char *new_str, const wchar_t *new_wstr, size_t len, Token *format = NULL);
+	void ChangeWithSpacesAround(Token *token, const char *new_str, const wchar_t *new_wstr, int64_t len, Token *format = NULL);
 	
 	// Check for the source and target type
 	bool Source(short s1, short s2 = -1, short s3 = -1, short s4 = -1, short s5 = -1, short s6 = -1); 
@@ -1352,7 +1353,7 @@ public:
 	bool ParseInformixReturns(Token *returns);
 	void InformixReturnToAssignment(ListWM &return_list);
 	void InformixConvertReturning(Token *create, Token *procedure);
-	void InformixGetReturningName(Token *retvalue, TokenStr &name, const char *prefix, const wchar_t *wprefix, size_t plen, int num, bool always_prefix);
+	void InformixGetReturningName(Token *retvalue, TokenStr &name, const char *prefix, const wchar_t *wprefix, int64_t plen, int num, bool always_prefix);
 	bool ParseInformixIntoTable(Token *select);
 	bool InformixPatternAssignLastSerial(Token *let);
 	bool ParseInformixSetOptions(Token *set);
@@ -1396,8 +1397,8 @@ public:
 	void ConvertParameterIdentifier(Token *ref, Token *decl);
 	void ConvertVariableIdentifier(Token *token);
 	void ConvertVariableIdentifier(Token *ref, Token *decl);
-	void ConvertSchemaName(Token *token, TokenStr &ident, size_t *len);
-	void ConvertObjectName(Token *token, TokenStr &ident, size_t *len);
+	void ConvertSchemaName(Token *token, TokenStr &ident, int64_t *len);
+	void ConvertObjectName(Token *token, TokenStr &ident, int64_t *len);
 	bool ConvertCursorParameter(Token *token);
 	bool ConvertRecordVariable(Token *token);
 	bool ConvertImplicitForRecordVariable(Token *token);
@@ -1406,7 +1407,7 @@ public:
 	bool ConvertLocalTableColumn(Token *token);
 	bool ConvertSessionTemporaryTable(Token *token);
 	int GetIdentPartsCount(Token *token);
-	void GetNextIdentItem(Token *token, TokenStr &ident, size_t *len);
+	void GetNextIdentItem(Token *token, TokenStr &ident, int64_t *len);
 	void SplitIdentifierByLastPart(Token *token, TokenStr &lead, TokenStr &trail, int parts = -1);
 	bool ConvertTsqlVariable(Token *token);
 	bool ConvertToTsqlVariable(Token *token);
@@ -1427,15 +1428,15 @@ public:
 	ListwmItem* Find(ListWM &list, Token *what, Token *what2 = NULL);
 
 	// Create a new identifier by appending the word
-	Token *AppendIdentifier(Token *source, const char *word, const wchar_t *w_word, size_t len);
-	void AppendIdentifier(TokenStr &source, const char *word, const wchar_t *w_word, size_t len);
+	Token *AppendIdentifier(Token *source, const char *word, const wchar_t *w_word, int64_t len);
+	void AppendIdentifier(TokenStr &source, const char *word, const wchar_t *w_word, int64_t len);
 	void AppendIdentifier(TokenStr &source, TokenStr &append);
 	// Split identifier to 2 parts
 	void SplitIdentifier(Token *source, Token *first, Token *second);
 
 	// Add /* */ comments around the tokens
 	void Comment(Token *first, Token *last = NULL);
-	void Comment(const char *word, const wchar_t *w_word, size_t len, Token *first, Token *last);
+	void Comment(const char *word, const wchar_t *w_word, int64_t len, Token *first, Token *last);
 	void CommentNoSpaces(Token *first, Token *last = NULL);
 
 	// Check whether the token is valid column/table alias

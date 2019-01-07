@@ -22,8 +22,8 @@
 #include <string>
 #include <queue>
 #include "sqldata.h"
-#include "applog.h"
-#include "parameters.h"
+#include "../sqlcommon/applog.h"
+#include "../sqlcommon/parameters.h"
 
 #define SD_OPTION					"-sd"		// Source database connection string
 #define TD_OPTION					"-td"		// Target database connection string

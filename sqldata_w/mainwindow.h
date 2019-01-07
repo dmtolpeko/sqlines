@@ -7,8 +7,8 @@
 #include <QComboBox>
 #include <QMutex>
 #include <stdarg.h>
-#include "sqldata.h"
-#include "sqldatacmd.h"
+#include "../sqldata/sqldata.h"
+#include "../sqldata/sqldatacmd.h"
 
 #define INI_MAINWINDOW_POS              "mainwindow_position"
 #define INI_MAINTAB_INDEX               "maintab_index"
@@ -136,20 +136,20 @@ class MainWindow : public QMainWindow
     std::list<SqlDataReply> _replies;
     std::list<QString> _raw_log_replies;
 
-    int _rows_read;
-    int _rows_written;
-    __int64 _bytes_written;
+    int64_t _rows_read;
+    int64_t _rows_written;
+    int64_t _bytes_written;
 
-    int _total_tables;
-    int _completed_tables;
-    int _processing_tables;
+    int64_t _total_tables;
+    int64_t _completed_tables;
+    int64_t _processing_tables;
 
-    int _equal_tables;
-    int _not_equal_tables;
-    int _failed_tables;
+    int64_t _equal_tables;
+    int64_t _not_equal_tables;
+    int64_t _failed_tables;
 
-    int _ddl_executed;
-    int _ddl_failed;
+    int64_t _ddl_executed;
+    int64_t _ddl_failed;
 
     // Current command (Transfer, Validate) is being executed
     int _current_command;
@@ -227,8 +227,11 @@ private:
     void SaveComboBoxToIni(char const *optionName, QComboBox *comboBox);
 
     int RunCommandThread();
+    #if defined(WIN32) || defined(WIN64)
     static unsigned int __stdcall RunCommandThreadS(void *object);
-
+    #else
+    static unsigned int RunCommandThreadS(void *object);
+    #endif
     void UpdateTitle();
 
     // Callbacks (Already called from a critical section)
@@ -239,8 +242,10 @@ private:
     void ConsoleCallback(const char *format, va_list args);
     static void ConsoleCallbackS(void *object, const char *format, va_list args);
 
-    QString EncodePassword(QString &password);
-    QString DecodePassword(QString &encoded);
+    QString EncodePassword(const QString &password);
+    QString DecodePassword(const QString &encoded);
 };
+
+#pragma clang diagnostic ignored "-Wredundant-parens"
 
 #endif // MAINWINDOW_H

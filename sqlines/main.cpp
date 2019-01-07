@@ -22,7 +22,7 @@
 // Entry point
 int main(int argc, char** argv)
 {
-	int rc = 0;
+	ssize_t rc = 0;
 
 	Sqlines sqlines;
 
@@ -38,6 +38,5 @@ int main(int argc, char** argv)
 
 	printf("\n");
 
-	return rc;
+	return static_cast<int>(rc);
 }
-

@@ -105,4 +105,6 @@ private:
     void saveEditLineToComboBox(QComboBox *comboBox);
 };
 
+#pragma clang diagnostic ignored "-Wredundant-parens"
+
 #endif // MAINWINDOW_H

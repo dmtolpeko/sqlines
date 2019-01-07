@@ -25,15 +25,28 @@
 #include <string.h>
 #include "sqlines.h"
 #include "filelist.h"
-#include "file.h"
-#include "sqlparserexp.h"
-#include "os.h"
-#include "str.h"
+#include "../sqlcommon/file.h"
+#include "../sqlcommon/sqlparserexp.h"
+#include "../sqlcommon/os.h"
+#include "../sqlcommon/str.h"
 
 // Constructor/destructor
 Sqlines::Sqlines()
 {
 	_parser = CreateParserObject();
+	_total_files = 0;
+
+    _a = false;
+	_stdin = false;
+    
+	_exe = NULL;
+}
+
+Sqlines::~Sqlines()
+{
+	DeleteParserObject(_parser);
+	_parser = NULL;
+
 	_total_files = 0;
 
     _a = false;
@@ -82,12 +95,12 @@ int Sqlines::ProcessFiles()
 	int num = 1;
 	int total_lines = 0;
 
-	int all_start = Os::GetTickCount();
+	long all_start = Os::GetTickCount();
 
 	// Handle each file
 	for(std::list<std::string>::iterator i = fileList.Get().begin(); i != fileList.Get().end(); i++, num++)
 	{
-		int start = Os::GetTickCount();
+		long start = Os::GetTickCount();
 
 		std::string current = *i;
 		std::string relative_name = File::GetRelativeName(_in.c_str(), current.c_str()); 
@@ -96,8 +109,8 @@ int Sqlines::ProcessFiles()
 
 		std::string out_name = GetOutFileName(*i, relative_name);
 
-		int in_size = 0;
-		int in_lines = 0;
+		int64_t in_size = 0;
+		int64_t in_lines = 0;
 
 		SetParserOption(_parser, SQLINES_CURRENT_FILE, relative_name.c_str());
 
@@ -106,7 +119,7 @@ int Sqlines::ProcessFiles()
 
 		total_lines += in_lines;
 
-		int end = Os::GetTickCount() - start;
+		long end = Os::GetTickCount() - start;
 
 		char time_fmt[21];
 		char size_fmt[21];
@@ -123,7 +136,7 @@ int Sqlines::ProcessFiles()
     if(_total_files > 0)
     {
         char summary[1024];
-        sprintf(summary, "\n\nTotal: %d file%s, %s, %d line%s, %s", _total_files, SUFFIX(_total_files), 
+        sprintf(summary, "\n\nTotal: %zu file%s, %s, %d line%s, %s", _total_files, SUFFIX(_total_files), 
             total_size_fmt, total_lines, SUFFIX(total_lines), total_time_fmt);
 
 		_log.Log("%s", summary);
@@ -180,7 +193,7 @@ std::string Sqlines::GetOutFileName(std::string &input, std::string &relative_na
 	// -out option is set
 	else
 	{
-		int len = _out.size();
+		size_t len = _out.size();
 
 		// If multiple files are converted, -out must specify the directory; also if path terminates with \ the directory is specified
 		if(_total_files > 1 || (len > 0 && _out[len-1] == DIR_SEPARATOR_CHAR))
@@ -205,37 +218,39 @@ std::string Sqlines::GetOutFileName(std::string &input, std::string &relative_na
 }
 
 // Process a file
-int Sqlines::ProcessFile(std::string &file, std::string &out_file, int *in_size, int *in_lines)
+int Sqlines::ProcessFile(std::string &file, std::string &out_file, int64_t *in_size, int64_t *in_lines)
 {
 	if(_parser == NULL)
 		return -1;
 
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size <= 0)
 		return -1;
 
 	// Allocate a buffer for the file content
-	char *input = new char[size];
+	char *input = new char[size+1];
+
+	input[size] = 0;
 
 	// Get content of the file (without terminating 'x0')
 	int rc = File::GetContent(file.c_str(), input, size);
 
 	if(rc == -1)
 	{
-		delete input;
+		delete[] input;
 		return -1;
 	}
 
 	const char *output = NULL;
-	int out_size = 0;
-	int lines;
+	int64_t out_size = 0;
+	int64_t lines;
 
 	// Convert the file
     rc = ConvertSql(_parser, input, size, &output, &out_size, &lines);
 
     // Write the target content to the file
-    rc = File::Write(out_file.c_str(), output, out_size);
+    rc = static_cast<int>(File::Write(out_file.c_str(), output, out_size));
 
     FreeOutput(output);
 
@@ -245,7 +260,7 @@ int Sqlines::ProcessFile(std::string &file, std::string &out_file, int *in_size,
 	if(in_lines != NULL)
 		*in_lines = lines;
 
-	delete input;
+	delete[] input;
 
 	return rc;
 }
@@ -258,15 +273,15 @@ int Sqlines::ProcessStdin()
 
 	std::string in;
 
-	char c = '\x0';
+	int c = '\x0';
 
 	// Read STDIN
 	while((c = getchar()) != EOF)
-		in += c;
+		in += static_cast<char>(c);
 
 	const char *output = NULL;
-	int out_size = 0;
-	int lines;
+	int64_t out_size = 0;
+	int64_t lines;
 
 	// Convert the input
 	int rc = ConvertSql(_parser, in.c_str(), in.size(), &output, &out_size, &lines);
@@ -293,10 +308,16 @@ int Sqlines::SetParameters(int argc, char **argv)
 	int rc = _parameters.Load(argc, argv);
 
 	// Get -stdin option
-	char *value = _parameters.Get(STDIN_OPTION);
+	const char *value = _parameters.Get(STDIN_OPTION);
 
 	if(value != NULL)
 		_stdin = true;
+
+	// Get -out option
+	value = _parameters.Get(OUT_OPTION);
+
+	if(value != NULL)
+		_out = value;
 
 	// Get -log option
 	value = _parameters.Get(LOG_OPTION);
@@ -307,7 +328,7 @@ int Sqlines::SetParameters(int argc, char **argv)
 		_logfile = SQLINES_LOGFILE;
 
 	// Set the directory and name of log file
-	_log.SetLogfile(_logfile.c_str());
+	_log.SetLogfile(_logfile.c_str(), _out.c_str());
 
 	if(_stdin == false)
 		_log.Log("\n%s\n%s", SQLINES_VERSION, SQLINES_COPYRIGHT);
@@ -329,12 +350,6 @@ int Sqlines::SetParameters(int argc, char **argv)
 
 	if(value != NULL)
 		_in = value;
-
-	// Get -out option
-	value = _parameters.Get(OUT_OPTION);
-
-	if(value != NULL)
-		_out = value;
 
     // Get -a option
 	value = _parameters.Get(A_OPTION);
@@ -375,8 +390,8 @@ int Sqlines::SetParameters(int argc, char **argv)
 // Set source and target types
 void Sqlines::SetTypes()
 {
-	int source = DefineType(_s.c_str());
-	int target = DefineType(_t.c_str());
+	short source = DefineType(_s.c_str());
+	short target = DefineType(_t.c_str());
 
 	SetParserTypes(_parser, source, target);
 }

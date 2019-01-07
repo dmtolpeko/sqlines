@@ -4,9 +4,9 @@
 
 #include <string.h>
 #include <string>
-#include "str.h"
+#include "../sqlcommon/str.h"
 #include "sqlasaapi.h"
-#include "os.h"
+#include "../sqlcommon/os.h"
 
 // MySQL C API definitions
 #include <mysql.h>
@@ -94,7 +94,7 @@ int SqlAsaApi::Connect(size_t *time_spent)
 		conn += ";";
 	}
 
-	rc = SQLDriverConnect(_hdbc, NULL, (SQLCHAR*)conn.c_str(), SQL_NTS, NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
+	rc = SQLDriverConnect(_hdbc, NULL, reinterpret_cast<SQLCHAR*>(const_cast<char*>(conn.c_str())), SQL_NTS, NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
 
 	if(rc == SQL_ERROR)
 	{
@@ -145,7 +145,7 @@ void SqlAsaApi::Deallocate()
 }
 
 // Get row count for the specified object
-int SqlAsaApi::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlAsaApi::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -160,7 +160,7 @@ int SqlAsaApi::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlAsaApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlAsaApi::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	SQLHANDLE stmt;
 	int q_result = 0;
@@ -171,7 +171,7 @@ int SqlAsaApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
 	int rc = SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -211,7 +211,7 @@ int SqlAsaApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 	int rc = SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -226,8 +226,8 @@ int SqlAsaApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlAsaApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> *dtmap)
+int SqlAsaApi::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> *dtmap)
 {
 	size_t start = GetTickCount();
 
@@ -235,7 +235,7 @@ int SqlAsaApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	int rc = SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &_hstmt_cursor);
 
 	// Execute the query
-	rc = SQLExecDirect(_hstmt_cursor, (SQLCHAR*)query, SQL_NTS);
+	rc = SQLExecDirect(_hstmt_cursor, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -543,7 +543,7 @@ int SqlAsaApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 		if(_cursor_cols[i]._data != NULL)
 		{
 			// Allocate indicators
-			_cursor_cols[i].ind = new size_t[_cursor_allocated_rows];
+			_cursor_cols[i].ind = new long[_cursor_allocated_rows];
 
 			if(_cursor_cols[i]._lob == false)
 			{
@@ -586,7 +586,7 @@ int SqlAsaApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlAsaApi::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlAsaApi::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	if(_cursor_allocated_rows <= 0)
 		return -1;
@@ -602,7 +602,7 @@ int SqlAsaApi::Fetch(int *rows_fetched, size_t *time_spent)
 	// Read not bound LOB data (first chunk)
 	if((rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) && _cursor_lob_exists == true)
 	{
-		for(size_t i = 0; i < _cursor_cols_count; i++)
+		for(long i = 0; i < _cursor_cols_count; i++)
 		{
 			if(_cursor_cols[i]._lob == false)
 				continue;
@@ -634,7 +634,7 @@ bool SqlAsaApi::CanParallelReadWrite()
 }
 
 // Get partial LOB content
-int SqlAsaApi::GetLobPart(size_t /*row*/, size_t column, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlAsaApi::GetLobPart(long /*row*/, long column, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	SQLLEN ind = 0;
 	
@@ -651,7 +651,7 @@ int SqlAsaApi::GetLobPart(size_t /*row*/, size_t column, void * /*data*/, size_t
 
 	// NULL value in LOB
 	if(ind == -1)
-		_cursor_cols[column].ind[0] = (size_t)-1;
+		_cursor_cols[column].ind[0] = -1;
 	else
 	// LONG VARCHAR
 	if(_cursor_cols[column]._native_dt == SQL_LONGVARCHAR)
@@ -661,7 +661,7 @@ int SqlAsaApi::GetLobPart(size_t /*row*/, size_t column, void * /*data*/, size_t
 			_cursor_cols[column].ind[0] = _cursor_cols[column]._fetch_len - 1;
 		// For last chunk x0 not included (!) to ind (tested on ASA 9)
 		else
-			_cursor_cols[column].ind[0] = (size_t)ind;
+			_cursor_cols[column].ind[0] = ind;
 	}
 	else
 	// LONG NVARCHAR
@@ -671,7 +671,7 @@ int SqlAsaApi::GetLobPart(size_t /*row*/, size_t column, void * /*data*/, size_t
 			_cursor_cols[column].ind[0] = _cursor_cols[column]._fetch_len - 1;
 		// For last chunk u0000 not included (!) to ind (tested on ASA 16)
 		else
-			_cursor_cols[column].ind[0] = (size_t)ind;
+			_cursor_cols[column].ind[0] = ind;
 	}
 	else
 	if(_cursor_cols[column]._native_dt == SQL_LONGVARBINARY)
@@ -679,7 +679,7 @@ int SqlAsaApi::GetLobPart(size_t /*row*/, size_t column, void * /*data*/, size_t
 		if(ind >= (SQLLEN)_cursor_cols[column]._fetch_len)
 			_cursor_cols[column].ind[0] = _cursor_cols[column]._fetch_len;
 		else
-			_cursor_cols[column].ind[0] = (size_t)ind;
+			_cursor_cols[column].ind[0] = ind;
 	}
 	
 	return rc;
@@ -713,13 +713,13 @@ int SqlAsaApi::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlAsaApi::InitBulkTransfer(const char * /*table*/, size_t /*col_count*/, size_t /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
+int SqlAsaApi::InitBulkTransfer(const char * /*table*/, long /*col_count*/, long /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
 {
 	return -1;
 }
 
 // Transfer rows between databases
-int SqlAsaApi::TransferRows(SqlCol * /*s_cols*/, int /*rows_fetched*/, int * /*rows_written*/, size_t * /*bytes_written*/,
+int SqlAsaApi::TransferRows(SqlCol * /*s_cols*/, long /*rows_fetched*/, long * /*rows_written*/, size_t * /*bytes_written*/,
 							size_t * /*time_spent*/)
 {
 	return -1;
@@ -791,13 +791,13 @@ int SqlAsaApi::DropReferences(const char* table, size_t *time_spent)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlAsaApi::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlAsaApi::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlAsaApi::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlAsaApi::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }
@@ -832,7 +832,7 @@ int SqlAsaApi::GetAvailableTables(std::string &select, std::string &exclude, std
 	int rc = SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = SQLExecDirect(stmt, (SQLCHAR*)query.c_str(), SQL_NTS);
+	rc = SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query.c_str())), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -939,9 +939,9 @@ int SqlAsaApi::ReadTableColumns(std::string &condition)
 	
 	query += " ORDER BY c.table_id, c.column_id";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1096,9 +1096,9 @@ int SqlAsaApi::ReadTableConstraints(std::string &condition)
 		query2 += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1251,9 +1251,9 @@ int SqlAsaApi::ReadIndexes(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1382,9 +1382,9 @@ int SqlAsaApi::ReadIndexColumns(std::string &condition)
 
 	query += " ORDER BY ic.table_id, ic.index_id, ic.sequence";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1444,7 +1444,7 @@ int SqlAsaApi::ReadIndexColumns(std::string &condition)
 				if((*i).tabid == idx_col.tabid && (*i).num == column_id)
 				{
 					// Set column name
-					idx_col.column = (char*)Str::GetCopy((*i).column);
+					idx_col.column = const_cast<char*>(Str::GetCopy((*i).column));
 
 					// Set a column for UNIQUE constraint
 					SetUniqueConstraintColumn(idx_col);
@@ -1486,9 +1486,9 @@ int SqlAsaApi::ReadReferences(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1580,9 +1580,9 @@ int SqlAsaApi::ReadForeignKeyColumns(std::string &condition)
 
 	query += " ORDER BY i.primary_column_id";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1643,7 +1643,7 @@ int SqlAsaApi::ReadForeignKeyColumns(std::string &condition)
 
 					col_cns.cnsid = cnsid;
 					col_cns.tabid = tabid;
-					col_cns.column = (char*)Str::GetCopy((*i).column);
+					col_cns.column = const_cast<char*>(Str::GetCopy((*i).column));
 
 					_table_cons_columns.push_back(col_cns);
 
@@ -1673,9 +1673,9 @@ int SqlAsaApi::ReadForeignKeyActions()
 	std::string query = "SELECT foreign_table_id, foreign_key_id, event, referential_action";
 	query += " FROM systrigger WHERE referential_action IN ('C', 'D', 'N', 'R')";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1766,9 +1766,9 @@ int SqlAsaApi::ReadCheckConstraints(std::string & /*condition*/)
 	// Tested on ASA 9
 	std::string query = "SELECT check_id, check_defn FROM syscheck";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1784,6 +1784,7 @@ int SqlAsaApi::ReadCheckConstraints(std::string & /*condition*/)
 		{
 			int cnsid = 0;
 			char *check = NULL;
+			bool check_found = false;
 
 			SQLLEN len = (SQLLEN)cols[0].ind[i];
 
@@ -1817,8 +1818,15 @@ int SqlAsaApi::ReadCheckConstraints(std::string & /*condition*/)
 				if((*i).cnsid == cnsid && (*i).type == 'C')
 				{
 					(*i).condition = check;
+					check_found = true;
 					break;
 				}
+			}
+
+			// Delete if check was allocated but not assigned
+			if (check_found == false && check != NULL) {
+				delete[] check;
+				check = NULL;
 			}
 		}
 
@@ -1847,9 +1855,9 @@ void SqlAsaApi::SetPrimaryKeyColumn(SqlColMeta &col_meta)
 			col_cns.cnsid = (*i).cnsid;
 			col_cns.tabid = (*i).tabid;
 
-			col_cns.schema = (char*)Str::GetCopy(col_meta.schema);
-			col_cns.table = (char*)Str::GetCopy(col_meta.table);
-			col_cns.column = (char*)Str::GetCopy(col_meta.column);
+			col_cns.schema = const_cast<char*>(Str::GetCopy(col_meta.schema));
+			col_cns.table = const_cast<char*>(Str::GetCopy(col_meta.table));
+			col_cns.column = const_cast<char*>(Str::GetCopy(col_meta.column));
 
 			_table_cons_columns.push_back(col_cns);
 
@@ -1875,7 +1883,7 @@ void SqlAsaApi::SetUniqueConstraintColumn(SqlIndColumns &idx_col)
 
 			col_cns.cnsid = (*i).cnsid;
 			col_cns.tabid = (*i).tabid;
-			col_cns.column = (char*)Str::GetCopy(idx_col.column);
+			col_cns.column = const_cast<char*>(Str::GetCopy(idx_col.column));
 
 			_table_cons_columns.push_back(col_cns);
 
@@ -2293,9 +2301,9 @@ void SqlAsaApi::SetVersion()
 	// Tested on ASA 9
 	const char *query = "SELECT @@VERSION FROM dummy";
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;

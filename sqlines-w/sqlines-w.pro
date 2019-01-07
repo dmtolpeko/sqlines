@@ -5,6 +5,7 @@
 #-------------------------------------------------
 
 QT       += core gui
+greaterThan(4, QT_MAJOR_VERSION): QT += widgets
 
 TARGET = sqlines-w
 TEMPLATE = app
@@ -12,12 +13,12 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    str.cpp \
-    file.cpp
+    ../sqlcommon/str.cpp \
+    ../sqlcommon/file.cpp
 
 HEADERS  += mainwindow.h \
-    str.h \
-    file.h
+    ../sqlcommon/str.h \
+    ../sqlcommon/file.h
 
 FORMS    += mainwindow.ui
 

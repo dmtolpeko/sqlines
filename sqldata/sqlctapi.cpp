@@ -17,9 +17,9 @@
 // SqlCtApi Sybase CTLIB API
 
 #include "sqlctapi.h"
-#include "str.h"
-#include "os.h"
-#include "file.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
+#include "../sqlcommon/file.h"
 
 // Constructor
 SqlCtApi::SqlCtApi()
@@ -267,7 +267,7 @@ int SqlCtApi::Connect(size_t *time_spent)
 	}
 
 	// Connect to the server
-	rc = _ct_connect(_connection, (CS_CHAR*)server, CS_NULLTERM);
+	rc = _ct_connect(_connection, const_cast<CS_CHAR*>(server), CS_NULLTERM);
 
 	if(rc != CS_SUCCEED)
 	{
@@ -285,7 +285,7 @@ int SqlCtApi::Connect(size_t *time_spent)
 		sql += _db;
 
 		// Add command to the buffer
-		rc = _ct_command(cmd, CS_LANG_CMD, (CS_CHAR*)sql.c_str(), CS_NULLTERM, CS_UNUSED);
+		rc = _ct_command(cmd, CS_LANG_CMD, const_cast<CS_CHAR*>(sql.c_str()), CS_NULLTERM, CS_UNUSED);
 
 		// Send command
 		if(rc == CS_SUCCEED)
@@ -347,7 +347,7 @@ void SqlCtApi::Deallocate()
 }
 
 // Get row count for the specified object
-int SqlCtApi::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlCtApi::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -362,7 +362,7 @@ int SqlCtApi::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlCtApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlCtApi::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	if(query == NULL || result == NULL)
 		return -1;
@@ -374,7 +374,7 @@ int SqlCtApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
 	// Allocate command 
 	int rc = _ct_cmd_alloc(_connection, &cmd);
 
-	rc = _ct_command(cmd, CS_LANG_CMD, (CS_CHAR*)query, CS_NULLTERM, CS_UNUSED);
+	rc = _ct_command(cmd, CS_LANG_CMD, const_cast<CS_CHAR*>(query), CS_NULLTERM, CS_UNUSED);
 
 	// Send the command
 	if(rc == CS_SUCCEED)
@@ -403,7 +403,7 @@ int SqlCtApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
 		CS_INT len;
 		CS_SMALLINT ind;
 	
-		CS_DATAFMT fmt = {0};
+		CS_DATAFMT fmt = {{0},0,0,0,0,0,0,0,0,0,0};
 
 		fmt.datatype = CS_INT_TYPE;
 		fmt.maxlength = sizeof(int);
@@ -466,8 +466,8 @@ int SqlCtApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlCtApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> * /*dtmap*/)
+int SqlCtApi::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> * /*dtmap*/)
 {
 	if(query == NULL) 
 		return -1;
@@ -481,7 +481,7 @@ int SqlCtApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 	// Allocate command 
 	int rc = _ct_cmd_alloc(_connection, &_cursor_cmd);
 
-	rc = _ct_command(_cursor_cmd, CS_LANG_CMD, (CS_CHAR*)query, CS_NULLTERM, CS_UNUSED);
+	rc = _ct_command(_cursor_cmd, CS_LANG_CMD, const_cast<CS_CHAR*>(query), CS_NULLTERM, CS_UNUSED);
 
 	// Send the command
 	if(rc == CS_SUCCEED)
@@ -544,7 +544,7 @@ int SqlCtApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 		_cursor_cols[i]._native_dt = fmt[i].datatype;
 
 		// Get column length for character and binary strings
-		_cursor_cols[i]._len = (size_t)fmt[i].maxlength;
+		_cursor_cols[i]._len = fmt[i].maxlength;
 				
 		// For TEXT and UNITEXT Sybase ASE 16 returns size 32768, change to 1M
 		if(_cursor_cols[i]._native_dt == CS_TEXT_TYPE || _cursor_cols[i]._native_dt == CS_UNITEXT_TYPE)
@@ -568,7 +568,7 @@ int SqlCtApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 	else
 	if(buffer_memory > 0)
 	{
-		size_t rows = buffer_memory/row_size;
+		long rows = buffer_memory/row_size;
 		_cursor_allocated_rows = rows > 0 ? rows : 1;
 	}	
 
@@ -680,7 +680,7 @@ int SqlCtApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 			_cursor_cols[i]._native_fetch_dt = CS_CHAR_TYPE;
 
 			// Include sign, decimal point and terminating zero
-			_cursor_cols[i]._fetch_len = (size_t)(_cursor_cols[i]._precision + _cursor_cols[i]._scale + 3);
+			_cursor_cols[i]._fetch_len = (_cursor_cols[i]._precision + _cursor_cols[i]._scale + 3);
 			_cursor_cols[i]._data = new char[_cursor_cols[i]._fetch_len * _cursor_allocated_rows];
 
 			fmt[i].datatype = CS_CHAR_TYPE;
@@ -875,7 +875,7 @@ int SqlCtApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlCtApi::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlCtApi::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	size_t start = GetTickCount();
 
@@ -932,13 +932,13 @@ int SqlCtApi::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlCtApi::InitBulkTransfer(const char * /*table*/, size_t /*col_count*/, size_t /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
+int SqlCtApi::InitBulkTransfer(const char * /*table*/, long /*col_count*/, long /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
 {
 	return -1;
 }
 
 // Transfer rows between databases
-int SqlCtApi::TransferRows(SqlCol * /*s_cols*/, int /*rows_fetched*/, int * /*rows_written*/, size_t * /*bytes_written*/,
+int SqlCtApi::TransferRows(SqlCol * /*s_cols*/, long /*rows_fetched*/, long * /*rows_written*/, size_t * /*bytes_written*/,
 							size_t * /*time_spent*/)
 {
 	return -1;
@@ -974,13 +974,13 @@ int SqlCtApi::DropReferences(const char* /*table*/, size_t * /*time_spent*/)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlCtApi::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlCtApi::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlCtApi::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlCtApi::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }
@@ -1009,7 +1009,7 @@ int SqlCtApi::GetAvailableTables(std::string &table_template, std::string & /*ex
 		sql += condition;
 	}
 
-	rc = _ct_command(cmd, CS_LANG_CMD, (CS_CHAR*)sql.c_str(), CS_NULLTERM, CS_UNUSED);
+	rc = _ct_command(cmd, CS_LANG_CMD, const_cast<CS_CHAR*>(sql.c_str()), CS_NULLTERM, CS_UNUSED);
 
 	// Send the command
 	if(rc == CS_SUCCEED)
@@ -1125,9 +1125,9 @@ int SqlCtApi::ReadTableColumns(std::string &condition)
 	
 	query += " ORDER BY o.id, c.colid";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1265,9 +1265,9 @@ int SqlCtApi::ReadIndexes(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1365,7 +1365,7 @@ int SqlCtApi::ReadIndexes(std::string &condition)
 
 				SqlIndColumns idx_col;
 
-				idx_col.index = (char*)Str::GetCopy(col_cns.constraint);
+				idx_col.index = const_cast<char*>(Str::GetCopy(col_cns.constraint));
 				idx_col.tabid = col_cns.tabid;
 				idx_col.idxid = col_cns.idxid;
 
@@ -1427,9 +1427,9 @@ int SqlCtApi::ReadReferences(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1534,9 +1534,9 @@ int SqlCtApi::ReadReferences(std::string &condition)
 
 				SqlConsColumns cns_col;
 
-				cns_col.schema = (char*)Str::GetCopy(cns.schema);
-				cns_col.table = (char*)Str::GetCopy(cns.table);
-				cns_col.constraint = (char*)Str::GetCopy(cns.constraint);
+				cns_col.schema = const_cast<char*>(Str::GetCopy(cns.schema));
+				cns_col.table = const_cast<char*>(Str::GetCopy(cns.table));
+				cns_col.constraint = const_cast<char*>(Str::GetCopy(cns.constraint));
 
 				cns_col.tabid = cns.tabid;
 				cns_col.cnsid = cns.cnsid;
@@ -1668,9 +1668,9 @@ void SqlCtApi::SetVersion()
 	// Tested on Sybase 16
 	std::string query = "SELECT @@version";
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;

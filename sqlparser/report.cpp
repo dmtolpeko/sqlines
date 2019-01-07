@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "report.h"
-#include "str.h"
+#include "../sqlcommon/str.h"
 
 // Constructor
 Report::Report()
@@ -48,6 +48,7 @@ void Report::CreateReport(Stats *stats, const char *summary)
     if(file == NULL)
     {
         printf("\n\nError: Cannot create report file %s", _report_path);
+        fclose(tpl_file);
         return;
     }
 

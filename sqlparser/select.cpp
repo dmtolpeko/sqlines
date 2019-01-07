@@ -892,7 +892,7 @@ bool SqlParser::ParseSelectFromClause(Token *select, bool nested_from, Token **f
 		count++;
 
 		// Alias exists so comma must follow, otherwise FROM clause ended no matter what goes next
-		if(GetNextCharToken(',', L',') == false)
+		if(GetNextCharToken(',', L',') == NULL)
 			break;
 	}
 

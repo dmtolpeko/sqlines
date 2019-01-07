@@ -24,10 +24,10 @@
 #include <stdio.h>
 #include <algorithm>
 #include "sqldata.h"
-#include "str.h"
-#include "sqlparserexp.h"
-#include "os.h"
-#include "file.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/sqlparserexp.h"
+#include "../sqlcommon/os.h"
+#include "../sqlcommon/file.h"
 
 // Constructor
 SqlData::SqlData()
@@ -841,7 +841,7 @@ void SqlData::SetSchemaMapping()
 void SqlData::SetTableMappingFromFile(std::string &file)
 {
 	// Mapping file size
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size == -1)
 		return;
@@ -851,7 +851,7 @@ void SqlData::SetTableMappingFromFile(std::string &file)
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return;
 	}
 
@@ -902,7 +902,7 @@ void SqlData::SetTableMappingFromFile(std::string &file)
 void SqlData::SetColumnMappingFromFile(std::string &file)
 {
 	// Mapping file size
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size == -1)
 		return;
@@ -912,7 +912,7 @@ void SqlData::SetColumnMappingFromFile(std::string &file)
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return;
 	}
 
@@ -1009,7 +1009,7 @@ void SqlData::SetColumnMappingFromFile(std::string &file)
 void SqlData::SetConstraintMappingFromFile(std::string &file)
 {
 	// Mapping file size
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size == -1)
 		return;
@@ -1019,7 +1019,7 @@ void SqlData::SetConstraintMappingFromFile(std::string &file)
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return;
 	}
 
@@ -1088,7 +1088,7 @@ void SqlData::SetConstraintMappingFromFile(std::string &file)
 void SqlData::SetDataTypeMappingFromFile(std::string &file)
 {
 	// Mapping file size
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size == -1)
 		return;
@@ -1098,7 +1098,7 @@ void SqlData::SetDataTypeMappingFromFile(std::string &file)
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return;
 	}
 
@@ -1220,7 +1220,7 @@ void SqlData::SetDataTypeMappingFromFile(std::string &file)
 void SqlData::SetTableSelectExpressionsFromFile(std::string &file)
 {
 	// Configuration file with select expressions
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size == -1)
 		return;
@@ -1230,7 +1230,7 @@ void SqlData::SetTableSelectExpressionsFromFile(std::string &file)
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return;
 	}
 
@@ -1280,7 +1280,7 @@ void SqlData::SetTableSelectExpressionsFromFile(std::string &file)
 void SqlData::SetTableSelectExpressionsAllFromFile(std::string &file)
 {
 	// Configuration file with select expressions
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size == -1)
 		return;
@@ -1290,7 +1290,7 @@ void SqlData::SetTableSelectExpressionsAllFromFile(std::string &file)
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return;
 	}
 
@@ -1317,7 +1317,7 @@ void SqlData::SetTableSelectExpressionsAllFromFile(std::string &file)
 void SqlData::SetTableWhereConditionsFromFile(std::string &file)
 {
 	// Configuration file with WHERE conditions
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size == -1)
 		return;
@@ -1327,7 +1327,7 @@ void SqlData::SetTableWhereConditionsFromFile(std::string &file)
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return;
 	}
 
@@ -1512,6 +1512,9 @@ int SqlData::StartLocalWorkers()
 #endif
 		_all_workers++;
 	}
+
+	// TODO: warning: Potential leak of memory pointed to by 'data' [clang-analyzer-cplusplus.NewDeleteLeaks]
+
 	return 0;
 }
 
@@ -1958,7 +1961,7 @@ void SqlData::ConvertSql(std::string &in, std::string &out)
 	Os::EnterCriticalSection(&_task_queue_critical_section);
 
 	const char *output = NULL;
-	int out_size = 0;
+	int64_t out_size = 0;
 
 	// Convert the file
 	int rc = ::ConvertSql(_sqlParser, in.c_str(), (int)in.size(), &output, &out_size, NULL);

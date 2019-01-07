@@ -22,8 +22,8 @@
 
 #include <stdio.h>
 #include "sqlmysqlapi.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 // Required to access ODBC and CT-Lib constants
 #include <sql.h>
@@ -440,7 +440,7 @@ void SqlMysqlApi::Deallocate()
 }
 
 // Get row count for the specified object
-int SqlMysqlApi::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlMysqlApi::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -455,7 +455,7 @@ int SqlMysqlApi::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlMysqlApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlMysqlApi::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	if(query == NULL || result == NULL)
 		return -1;
@@ -484,7 +484,7 @@ int SqlMysqlApi::ExecuteScalar(const char *query, int *result, size_t *time_spen
 
 	if(row != NULL && row[0] != NULL)
 	{
-		sscanf(row[0], "%d", result);
+		sscanf(row[0], "%ld", result);
 		exists = true;
 	}
 
@@ -516,8 +516,8 @@ int SqlMysqlApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlMysqlApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool /*catalog_query*/, std::list<SqlDataTypeMap> * /*dtmap*/)
+int SqlMysqlApi::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool /*catalog_query*/, std::list<SqlDataTypeMap> * /*dtmap*/)
 {
 	if(query == NULL)
 		return -1;
@@ -552,7 +552,7 @@ int SqlMysqlApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_me
 	_cursor_lob_exists = false;
 
 	// Get column information
-	for(int i = 0; i < _cursor_cols_count; i++)
+	for(long i = 0; i < _cursor_cols_count; i++)
 	{
 		// Copy column name
 		strcpy(_cursor_cols[i]._name, fields[i].name);
@@ -607,7 +607,7 @@ int SqlMysqlApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_me
 		if(row_size == 0)
 			row_size++;
 
-		size_t rows = buffer_memory/row_size;
+		long rows = buffer_memory/row_size;
 		_cursor_allocated_rows = rows > 0 ? rows : 1;
 	}	
 
@@ -626,10 +626,10 @@ int SqlMysqlApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_me
 			_cursor_cols[i]._data = new char[_cursor_cols[i]._fetch_len * _cursor_allocated_rows];
 		}
 
-		_cursor_cols[i].ind = new size_t[_cursor_allocated_rows];
+		_cursor_cols[i].ind = new long[_cursor_allocated_rows];
 	}
 
-	int fetched = 0;
+	long fetched = 0;
 
 	// Fetch initial set of data
 	rc = Fetch(&fetched, NULL);
@@ -653,7 +653,7 @@ int SqlMysqlApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_me
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlMysqlApi::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlMysqlApi::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	MYSQL_ROW row = NULL;
 	int fetched = 0;
@@ -661,7 +661,7 @@ int SqlMysqlApi::Fetch(int *rows_fetched, size_t *time_spent)
 	size_t start = Os::GetTickCount();
 
 	// Fill the buffer
-	for(int i = 0; i < _cursor_allocated_rows; i++)
+	for(long i = 0; i < _cursor_allocated_rows; i++)
 	{
 		// Fetch the next row
 		row =  _mysql_fetch_row(_cursor_result);
@@ -672,7 +672,7 @@ int SqlMysqlApi::Fetch(int *rows_fetched, size_t *time_spent)
 		unsigned long *lengths = (unsigned long*)_mysql_fetch_lengths(_cursor_result);
 
 		// Copy column values and set indicators
-		for(int k = 0; k < _cursor_cols_count; k++)
+		for(long k = 0; k < _cursor_cols_count; k++)
 		{
 			// Check for NULL value
 			if(row[k] == NULL)
@@ -758,7 +758,7 @@ int SqlMysqlApi::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlMysqlApi::InitBulkTransfer(const char *table, size_t col_count, size_t /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
+int SqlMysqlApi::InitBulkTransfer(const char *table, long col_count, long /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
 {
 	TRACE("MySQL/C InitBulkTransfer() Entered");
 
@@ -812,7 +812,7 @@ int SqlMysqlApi::InitBulkTransfer(const char *table, size_t col_count, size_t /*
 }
 
 // Transfer rows between databases
-int SqlMysqlApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+int SqlMysqlApi::TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 							size_t *time_spent)
 {
 	if(rows_fetched == 0)
@@ -908,10 +908,10 @@ int SqlMysqlApi::local_infile_read(char *buf, unsigned int buf_len)
 	}
 	
 	// Copy rows
-	for(size_t i = _ldi_current_row; i < _ldi_rows_count; i++, _ldi_current_row++)
+	for(long i = _ldi_current_row; i < _ldi_rows_count; i++, _ldi_current_row++)
 	{
 		// Copy column data
-		for(size_t k = _ldi_current_col; k < _ldi_cols_count; k++, _ldi_current_col++)
+		for(long k = _ldi_current_col; k < _ldi_cols_count; k++, _ldi_current_col++)
 		{
 			// Add column delimiter if we are not in the middle of column
 			if(k > 0 && _ldi_current_col_len == 0)
@@ -933,7 +933,7 @@ int SqlMysqlApi::local_infile_read(char *buf, unsigned int buf_len)
 				}
 			}
 			
-			int len = -1;
+			long len = -1;
 
 			// Check whether column is null
 			if(_source_api_type == SQLDATA_ORACLE && _ldi_cols[k]._ind2 != NULL)
@@ -955,8 +955,8 @@ int SqlMysqlApi::local_infile_read(char *buf, unsigned int buf_len)
 
 							if(lob_rc != -1 && _ldi_lob_size > 0)
 							{
-								size_t alloc_size = 0;
-								int read_size = 0;
+								long alloc_size = 0;
+								long read_size = 0;
 
 								_ldi_lob_data = _source_api_provider->GetLobBuffer(i, k, _ldi_lob_size, &alloc_size);
 
@@ -966,7 +966,7 @@ int SqlMysqlApi::local_infile_read(char *buf, unsigned int buf_len)
 								if(lob_rc == 0)
 								{
 									// Now set the size in bytes for both CLOB and BLOB
-									_ldi_lob_size = (size_t)read_size;
+									_ldi_lob_size = read_size;
 									len = read_size;
 								}
 								// Error reading LOB
@@ -1038,7 +1038,7 @@ int SqlMysqlApi::local_infile_read(char *buf, unsigned int buf_len)
 							_ldi_cols[k]._native_fetch_dt == SQL_C_CHAR))
 			{
 				// Copy data 
-				for(int m = _ldi_current_col_len; m < len; m++)
+				for(long m = _ldi_current_col_len; m < len; m++)
 				{
 					char c = 0;
 
@@ -1354,7 +1354,7 @@ void* SqlMysqlApi::StartLoadDataInfileS(void *object)
 int SqlMysqlApi::CloseBulkTransfer()
 {
 	TRACE("MySQL/C CloseBulkTransfer() Entered");
-	_ldi_current_row = (size_t)-1;
+	_ldi_current_row = -1;
 
 	// Do not wait for complete event if LOAD DATA INFILE command already ended
 	if(_ldi_terminated == 0)
@@ -1381,9 +1381,9 @@ int SqlMysqlApi::CloseBulkTransfer()
 // Execute SHOW WARNINGS and log results
 void SqlMysqlApi::ShowWarnings(const char *prefix)
 {
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	SqlCol *cols = NULL;
 
 	int rc = OpenCursor("SHOW WARNINGS", 100, 0, &col_count, &allocated_rows, &rows_fetched, &cols, NULL, true);
@@ -1537,13 +1537,13 @@ int SqlMysqlApi::DropReferences(const char* table, size_t *time_spent)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlMysqlApi::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlMysqlApi::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlMysqlApi::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlMysqlApi::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }

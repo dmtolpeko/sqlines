@@ -1,1 +1,1 @@
-g++ -m64 applog.cpp file.cpp filelist.cpp main.cpp os.cpp parameters.cpp sqlines.cpp str.cpp ../sqlparser/sqlparser.a -o sqlines
+g++ -m64 ../sqlcommon/applog.cpp ../sqlcommon/file.cpp filelist.cpp main.cpp ../sqlcommon/os.cpp ../sqlcommon/parameters.cpp sqlines.cpp ../sqlcommon/str.cpp ../sqlparser/sqlparser.a -o sqlines

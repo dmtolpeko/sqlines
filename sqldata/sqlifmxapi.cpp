@@ -3,8 +3,8 @@
 // Copyright (c) 2012 SQLines. All rights reserved
 
 #include "sqlifmxapi.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 // Constructor
 SqlIfmxApi::SqlIfmxApi()
@@ -185,7 +185,7 @@ int SqlIfmxApi::Connect(size_t *time_spent)
 	SQLCHAR full_conn[1024];
 	SQLSMALLINT full_conn_out_len;
 	
-	rc = _SQLDriverConnect(_hdbc, NULL, (SQLCHAR*)conn.c_str(), SQL_NTS, full_conn, 1024, &full_conn_out_len, SQL_DRIVER_NOPROMPT);
+	rc = _SQLDriverConnect(_hdbc, NULL, reinterpret_cast<SQLCHAR*>(const_cast<char*>(conn.c_str())), SQL_NTS, full_conn, 1024, &full_conn_out_len, SQL_DRIVER_NOPROMPT);
 	
 	if(rc == SQL_ERROR)
 	{
@@ -252,7 +252,7 @@ void SqlIfmxApi::Deallocate()
 }
 
 // Get row count for the specified object
-int SqlIfmxApi::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlIfmxApi::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -267,7 +267,7 @@ int SqlIfmxApi::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlIfmxApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlIfmxApi::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	SQLHANDLE stmt;
 	int q_result = 0;
@@ -278,7 +278,7 @@ int SqlIfmxApi::ExecuteScalar(const char *query, int *result, size_t *time_spent
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -318,7 +318,7 @@ int SqlIfmxApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -333,8 +333,8 @@ int SqlIfmxApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlIfmxApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> *dtmap)
+int SqlIfmxApi::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> *dtmap)
 {
 	size_t start = GetTickCount();
 
@@ -345,7 +345,7 @@ int SqlIfmxApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 		return -1;
 
 	// Execute the query
-	rc = _SQLExecDirect(_hstmt_cursor, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(_hstmt_cursor, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -379,7 +379,7 @@ int SqlIfmxApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 	_cursor_lob_exists = false;
 
 	// Get column information
-	for(int i = 0; i < _cursor_cols_count; i++)
+	for(long i = 0; i < _cursor_cols_count; i++)
 	{
 		SQLSMALLINT native_dt;
 		SQLULEN column_size;
@@ -453,7 +453,7 @@ int SqlIfmxApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 	else
 	if(buffer_memory > 0)
 	{
-		size_t rows = (size_t)buffer_memory/row_size;
+		long rows = buffer_memory/row_size;
 		_cursor_allocated_rows = rows > 0 ? rows : 1;
 
 		// On some systems unexpected behaviour (long waits or hang) when buffer is too large (100K rows i.e)
@@ -465,7 +465,7 @@ int SqlIfmxApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 		_cursor_allocated_rows = 1;
 
 	// Allocate buffers to each column
-	for(int i = 0; i < _cursor_cols_count; i++)
+	for(long i = 0; i < _cursor_cols_count; i++)
 	{
 		// Data type CHAR or VARCHAR
 		if(_cursor_cols[i]._native_dt == SQL_CHAR || _cursor_cols[i]._native_dt == SQL_VARCHAR)
@@ -595,7 +595,7 @@ int SqlIfmxApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 		if(_cursor_cols[i]._data != NULL)
 		{
 			// Allocate indicators
-			_cursor_cols[i].ind = new size_t[_cursor_allocated_rows];
+			_cursor_cols[i].ind = new long[_cursor_allocated_rows];
 
 			// Do not bind LOB column
 			if(_cursor_cols[i]._lob == false)
@@ -610,7 +610,7 @@ int SqlIfmxApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 	}
 
 	// Prepare array fetch
-	rc = _SQLSetStmtAttr(_hstmt_cursor, SQL_ATTR_ROW_ARRAY_SIZE, (SQLPOINTER)_cursor_allocated_rows, 0); 
+	rc = _SQLSetStmtAttr(_hstmt_cursor, SQL_ATTR_ROW_ARRAY_SIZE, reinterpret_cast<SQLPOINTER>(_cursor_allocated_rows), 0); 
 	rc = _SQLSetStmtAttr(_hstmt_cursor, SQL_ATTR_ROWS_FETCHED_PTR, &_cursor_fetched, 0);
 
 	// Perform initial fetch, returns SQL_SUCCESS even if there are less rows than array size
@@ -635,7 +635,7 @@ int SqlIfmxApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_mem
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlIfmxApi::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlIfmxApi::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	if(_cursor_allocated_rows <= 0)
 		return -1;
@@ -652,7 +652,7 @@ int SqlIfmxApi::Fetch(int *rows_fetched, size_t *time_spent)
 	// Read not bound LOB data (first chunk)
 	if((rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) && _cursor_lob_exists == true)
 	{
-		for(size_t i = 0; i < _cursor_cols_count; i++)
+		for(long i = 0; i < _cursor_cols_count; i++)
 		{
 			if(_cursor_cols[i]._lob == false)
 				continue;
@@ -703,13 +703,13 @@ int SqlIfmxApi::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlIfmxApi::InitBulkTransfer(const char * /*table*/, size_t /*col_count*/, size_t /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
+int SqlIfmxApi::InitBulkTransfer(const char * /*table*/, long /*col_count*/, long /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
 {
 	return -1;
 }
 
 // Transfer rows between databases
-int SqlIfmxApi::TransferRows(SqlCol * /*s_cols*/, int /*rows_fetched*/, int * /*rows_written*/, size_t * /*bytes_written*/,
+int SqlIfmxApi::TransferRows(SqlCol * /*s_cols*/, long /*rows_fetched*/, long * /*rows_written*/, size_t * /*bytes_written*/,
 							size_t * /*time_spent*/)
 {
 	return -1;
@@ -749,19 +749,19 @@ int SqlIfmxApi::DropReferences(const char* /*table*/, size_t * /*time_spent*/)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlIfmxApi::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlIfmxApi::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlIfmxApi::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlIfmxApi::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }
 
 // Get partial LOB content
-int SqlIfmxApi::GetLobPart(size_t /*row*/, size_t column, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlIfmxApi::GetLobPart(long /*row*/, long column, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	SQLLEN ind = 0;
 
@@ -833,7 +833,7 @@ int SqlIfmxApi::GetAvailableTables(std::string &select, std::string &exclude, st
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query.c_str(), SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query.c_str())), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -919,9 +919,9 @@ int SqlIfmxApi::ReadTableColumns(std::string &condition)
 	
 	query += " ORDER BY c.tabid, c.colno";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1035,9 +1035,9 @@ int SqlIfmxApi::ReadIdentityColumns(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1112,9 +1112,9 @@ int SqlIfmxApi::ReadDefaults(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1133,7 +1133,7 @@ int SqlIfmxApi::ReadDefaults(std::string &condition)
 			char type = '\x0';
 
 			char *default_v = NULL;
-			size_t default_len = 0; 
+			long default_len = 0; 
 			
 			SQLLEN len = (SQLLEN)cols[0].ind[i];
 
@@ -1157,7 +1157,7 @@ int SqlIfmxApi::ReadDefaults(std::string &condition)
 			if(cols[3].ind[i] != -1)
 			{
 				default_v = cols[3]._data + cols[3]._fetch_len * i;
-				default_len = (size_t)cols[3].ind[i];
+				default_len = cols[3].ind[i];
 			}
 			
 			// Find the column and set the default
@@ -1184,7 +1184,7 @@ int SqlIfmxApi::ReadDefaults(std::string &condition)
 }
 
 // Set column default value when reading the catalog
-void SqlIfmxApi::SetDefault(SqlColMeta &col, char type, char *value, size_t len)
+void SqlIfmxApi::SetDefault(SqlColMeta &col, char type, char *value, long len)
 {
 	// String (non-quoted) or number literal
 	if(type == 'L')
@@ -1233,7 +1233,7 @@ void SqlIfmxApi::SetDefault(SqlColMeta &col, char type, char *value, size_t len)
 				i++;
 			}
 
-			col.default_value = (char*)Str::GetCopy(cur + i, len - i);
+			col.default_value = const_cast<char*>(Str::GetCopy(cur + i, len - i));
 			col.default_value[len - i] = '\x0';
 
 			// Default value contains trailing spaces
@@ -1260,9 +1260,9 @@ int SqlIfmxApi::ReadTableConstraints(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1374,9 +1374,9 @@ int SqlIfmxApi::ReadCheckConstraints(std::string & /*condition*/)
 	query += " FROM syschecks WHERE type = 'T'";
 	query += " ORDER BY constrid, seqno"; 
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1464,9 +1464,9 @@ int SqlIfmxApi::ReadReferences(std::string & /*condition*/)
 {
 	std::string query = "SELECT constrid, primary FROM sysreferences";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1535,9 +1535,9 @@ int SqlIfmxApi::ReadIndexes(std::string &condition)
 		query += condition;
 	}
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1662,8 +1662,8 @@ int SqlIfmxApi::ReadIndexes(std::string &condition)
 
 				SqlIndColumns idx_col;
 
-				idx_col.schema = (char*)Str::GetCopy(idx.schema);
-				idx_col.index = (char*)Str::GetCopy(idx.index);
+				idx_col.schema = const_cast<char*>(Str::GetCopy(idx.schema));
+				idx_col.index = const_cast<char*>(Str::GetCopy(idx.index));
 				idx_col.tabid = idx.tabid;
 
 				// Find column name
@@ -1671,7 +1671,7 @@ int SqlIfmxApi::ReadIndexes(std::string &condition)
 				{
 					if((*m).tabid == idx_col.tabid && (*m).num == colno)
 					{
-						idx_col.column = (char*)Str::GetCopy((*m).column);
+						idx_col.column = const_cast<char*>(Str::GetCopy((*m).column));
 
                         // Force NOT NULL for primary key columns
                         if(pk_index)
@@ -1854,9 +1854,9 @@ void SqlIfmxApi::SetVersion()
 	// T means 32-bit Windows, U - 32-bit Unix, F - 64-bit Windows/Unix
 	const char *query = "SELECT dbinfo('version', 'full') FROM systables WHERE tabid=1";
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;

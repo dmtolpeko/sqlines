@@ -4,8 +4,8 @@
 
 #include <stdio.h>
 #include "sqlpgapi.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 // Required to access ODBC, CT-Lib, MySQL C constants
 #include <sql.h>
@@ -211,7 +211,7 @@ int SqlPgApi::Connect(size_t *time_spent)
 }
 
 // Get row count for the specified object
-int SqlPgApi::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlPgApi::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -226,7 +226,7 @@ int SqlPgApi::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlPgApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlPgApi::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	if(query == NULL || result == NULL)
 		return -1;
@@ -242,7 +242,7 @@ int SqlPgApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
 	if(_PQresultStatus(res) == PGRES_TUPLES_OK)
 	{
 		char *value = _PQgetvalue(res, 0, 0);
-		sscanf(value, "%d", result);
+		sscanf(value, "%ld", result);
 
 		exists = true;
 	}
@@ -288,8 +288,8 @@ int SqlPgApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlPgApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool /*catalog_query*/, std::list<SqlDataTypeMap> * /*dtmap*/)
+int SqlPgApi::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool /*catalog_query*/, std::list<SqlDataTypeMap> * /*dtmap*/)
 {
 	if(query == NULL)
 		return -1;
@@ -316,15 +316,15 @@ int SqlPgApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 	}
 
 	// Get the number of columns
-	_cursor_cols_count = (size_t)_PQnfields(_cursor_result);
+	_cursor_cols_count = _PQnfields(_cursor_result);
 
 	// Get the number of rows in the result set
-	_cursor_rows_count = (size_t)_PQntuples(_cursor_result);
+	_cursor_rows_count = _PQntuples(_cursor_result);
 
 	if(_cursor_cols_count > 0)
 		_cursor_cols = new SqlCol[_cursor_cols_count];
 
-	size_t row_size = 0;
+	long row_size = 0;
 
 	// Get column information
 	for(int i = 0; i < _cursor_cols_count; i++)
@@ -387,7 +387,7 @@ int SqlPgApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 		}
             
 		// Column length in bytes 
-		_cursor_cols[i]._len = (size_t)len;
+		_cursor_cols[i]._len = len;
 
 		/*
 		// BLOB 
@@ -411,7 +411,7 @@ int SqlPgApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 	else
 	if(buffer_memory > 0)
 	{
-		size_t rows = buffer_memory/row_size;
+		long rows = buffer_memory/row_size;
 		_cursor_allocated_rows = rows > 0 ? rows : 1;
 	}	
 
@@ -422,16 +422,16 @@ int SqlPgApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 	}
 
 	// Allocate buffers to each column
-	for(int i = 0; i < _cursor_cols_count; i++)
+	for(long i = 0; i < _cursor_cols_count; i++)
 	{
 		_cursor_cols[i]._native_fetch_dt = _cursor_cols[i]._native_dt;
 		_cursor_cols[i]._fetch_len = _cursor_cols[i]._len + 1;
 
 		_cursor_cols[i]._data = new char[_cursor_cols[i]._fetch_len * _cursor_allocated_rows];
-		_cursor_cols[i].ind = new size_t[_cursor_allocated_rows];
+		_cursor_cols[i].ind = new long[_cursor_allocated_rows];
 	}
 
-	int fetched = 0;
+	long fetched = 0;
 
 	// Fetch initial set of data
 	Fetch(&fetched, NULL);
@@ -455,7 +455,7 @@ int SqlPgApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memor
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlPgApi::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlPgApi::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	int fetched = 0;
 
@@ -475,12 +475,12 @@ int SqlPgApi::Fetch(int *rows_fetched, size_t *time_spent)
 
 			if(null == 1)
 			{
-				_cursor_cols[k].ind[i] = (size_t)-1;
+				_cursor_cols[k].ind[i] = -1;
 				continue;
 			}
 
 			// Get the actual data length in bytes
-			size_t len = (size_t)_PQgetlength(_cursor_result, _cursor_rows_fetched, k);			
+			long len = _PQgetlength(_cursor_result, _cursor_rows_fetched, k);			
 			
 			if(len > _cursor_cols[k]._fetch_len)
 				len = _cursor_cols[k]._fetch_len;
@@ -538,7 +538,7 @@ int SqlPgApi::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlPgApi::InitBulkTransfer(const char *table, size_t col_count, size_t /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
+int SqlPgApi::InitBulkTransfer(const char *table, long col_count, long /*allocated_array_rows*/, SqlCol * /*s_cols*/, SqlCol ** /*t_cols*/)
 {
 	std::string command = "COPY ";
 	command += table;
@@ -563,7 +563,7 @@ int SqlPgApi::InitBulkTransfer(const char *table, size_t col_count, size_t /*all
 }
 
 // Transfer rows between databases
-int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+int SqlPgApi::TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 							size_t *time_spent)
 {
 	if(rows_fetched == 0)
@@ -578,12 +578,12 @@ int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, 
 	int remain_len = LIBPQ_COPY_DATA_BUFFER_LEN;
 
 	// Copy rows
-	for(size_t i = 0; i < rows_fetched; i++)
+	for(long i = 0; i < rows_fetched; i++)
 	{
 		// Copy column data
-		for(size_t k = 0; k < _copy_cols_count; k++)
+		for(long k = 0; k < _copy_cols_count; k++)
 		{
-			int len = -1;
+			long len = -1;
 			char *lob_data = NULL;
 
 			// Check whether column is null
@@ -598,19 +598,19 @@ int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, 
 					// LOB column
 					if(s_cols[k]._native_fetch_dt == SQLT_BLOB || s_cols[k]._native_fetch_dt == SQLT_CLOB)
 					{
-						size_t lob_size = 0;
+						long lob_size = 0;
 
 						// Get the LOB size in bytes for BLOB, in characters for CLOB
 						int lob_rc = _source_api_provider->GetLobLength(i, k, &lob_size);
 
 						// Probably empty LOB
 						if(lob_rc != -1)
-							len = (int)lob_size;
+							len = lob_size;
 
 						if(lob_rc != -1 && lob_size > 0)
 						{
-							size_t alloc_size = 0;
-							int read_size = 0;
+							long alloc_size = 0;
+							long read_size = 0;
 
 							lob_data = _source_api_provider->GetLobBuffer(i, k, lob_size, &alloc_size);
 
@@ -907,13 +907,13 @@ int SqlPgApi::DropReferences(const char* /*table*/, size_t * /*time_spent*/)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlPgApi::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlPgApi::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlPgApi::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlPgApi::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }

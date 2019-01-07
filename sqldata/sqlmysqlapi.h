@@ -61,7 +61,7 @@ typedef int (STDCALL *mysql_queryFunc)(MYSQL *mysql, const char *stmt_str);
 typedef int (STDCALL *mysql_optionsFunc)(MYSQL *mysql, enum mysql_option option, const void *arg);
 typedef int (STDCALL *mysql_set_character_setFunc)(MYSQL *mysql, const char *csname);
 typedef void (*mysql_set_local_infile_handlerFunc)(MYSQL *mysql, int (*local_infile_init)(void **, const char *, void *), int (*local_infile_read)(void *, char *, unsigned int), void (*local_infile_end)(void *), int (*local_infile_error)(void *, char*, unsigned int), void *userdata);
-typedef my_bool (STDCALL *mysql_thread_initFunc)();
+typedef bool (STDCALL *mysql_thread_initFunc)();
 typedef MYSQL_RES* (STDCALL *mysql_use_resultFunc)(MYSQL *mysql);
 
 class SqlMysqlApi : public SqlApiBase
@@ -83,24 +83,24 @@ class SqlMysqlApi : public SqlApiBase
 	// Flag whether LOAD DATA INFILE command terminated
 	int _ldi_terminated;
 	// Number of columns for LOAD DATA INFILE command
-	size_t _ldi_cols_count;
+	long _ldi_cols_count;
 	// Number of rows in the current portion of data
-	int _ldi_rows_count;
+	long _ldi_rows_count;
 	// Column describtions and data for bulk copy
 	SqlCol *_ldi_cols;
 	// Current processed row, column and item in the portion of data
-	size_t _ldi_current_row;
-	size_t _ldi_current_col;
-	int _ldi_current_col_len;
+	long _ldi_current_row;
+	long _ldi_current_col;
+	long _ldi_current_col_len;
 	bool _ldi_write_newline;
 	// Buffer for the current LOB value
 	char *_ldi_lob_data;
-	size_t _ldi_lob_size;
+	long _ldi_lob_size;
 
 	// Bytes written during last transfer iteration (last batch)
-	int _ldi_bytes;
+	long _ldi_bytes;
 	// Bytes written since the beginning of table load
-	size_t _ldi_bytes_all;
+	long _ldi_bytes_all;
 
 	// Current LOAD DATA INFILE command
 	std::string _load_command;
@@ -164,30 +164,30 @@ public:
 	virtual void Deallocate();
 
 	// Get row count for the specified object
-	virtual int GetRowCount(const char *object, int *count, size_t *time_spent);
+	virtual int GetRowCount(const char *object, long *count, size_t *time_spent);
 
 	// Execute the statement and get scalar result
-	virtual int ExecuteScalar(const char *query, int *result, size_t *time_spent);
+	virtual int ExecuteScalar(const char *query, long *result, size_t *time_spent);
 
 	// Execute the statement
 	virtual int ExecuteNonQuery(const char *query, size_t *time_spent);
 
 	// Open cursor and allocate buffers
-	virtual int OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query = false,
+	virtual int OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query = false,
         std::list<SqlDataTypeMap> *dtmap = NULL);
 
 	// Fetch next portion of data to allocate buffers
-	virtual int Fetch(int *rows_fetched, size_t *time_spent);
+	virtual int Fetch(long *rows_fetched, size_t *time_spent);
 
 	// Close the cursor and deallocate buffers
 	virtual int CloseCursor();
 
 	// Initialize the bulk copy from one database into another
-	virtual int InitBulkTransfer(const char *table, size_t col_count, size_t allocated_array_rows, SqlCol *s_cols, SqlCol **t_cols);
+	virtual int InitBulkTransfer(const char *table, long col_count, long allocated_array_rows, SqlCol *s_cols, SqlCol **t_cols);
 
 	// Transfer rows between databases
-	virtual int TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+	virtual int TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 		size_t *time_spent);
 
 	// Specifies whether API allows to parallel reading from this API and write to another API
@@ -202,11 +202,11 @@ public:
 	virtual int DropReferences(const char* table, size_t *time_spent);
 
 	// Get the length of LOB column in the open cursor
-	virtual int GetLobLength(size_t row, size_t column, size_t *length);
+	virtual int GetLobLength(long row, long column, long *length);
 	// Get LOB content
-	virtual int GetLobContent(size_t row, size_t column, void *data, size_t length, int *len_ind);
+	virtual int GetLobContent(long row, long column, void *data, long length, long *len_ind);
 	// Get partial LOB content
-	virtual int GetLobPart(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/) { return -1; }
+	virtual int GetLobPart(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/) { return -1; }
 	
 	// Get the list of available tables
 	virtual int GetAvailableTables(std::string &select, std::string &exclude, std::list<std::string> &tables);

@@ -64,10 +64,14 @@ void Options::loadOptions()
     workingDirectory = settings->value(OPTION_WORKDIR).toString();
     if(workingDirectory.isEmpty())
     {
-      // reading application data settings
-      workingDirectory = QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
-      if(workingDirectory.isEmpty())
-       workingDirectory = QDir::toNativeSeparators(QDir::homePath());
+        // reading application data settings
+        #if QT_VERSION >= QT_VERSION_CHECK(5,0,0)
+        workingDirectory = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+        #else
+        workingDirectory = QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
+        #endif
+        if(workingDirectory.isEmpty())
+            workingDirectory = QDir::toNativeSeparators(QDir::homePath());
     }
 
     ui->workdirEdit->setText(workingDirectory);

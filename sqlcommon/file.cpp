@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
 // File - File operations
 
 #include <stdio.h>
@@ -25,8 +25,13 @@
 #include <io.h>
 #include <direct.h>
 #else
+//#include <QDirIterator>
 #include <sys/stat.h>
+#ifdef __APPLE__
+#include <sys/uio.h>
+#else
 #include <sys/io.h>
+#endif
 #include <unistd.h>
 
 #define _read read
@@ -40,9 +45,8 @@
 #include <errno.h>
 
 #include "file.h"
-#include "str.h"
 
-// Check if path includes a directory, not just file name
+// Check if path includes in a directory, not just file name
 bool File::IsDirectoryInPath(const char *path)
 {
 	if(path == NULL)
@@ -89,10 +93,10 @@ bool File::IsDirectory(const char *path)
 	if(path == NULL)
 		return false;
 
-#if defined(WIN32) || defined(WIN64)
+#ifdef WIN32
 
 	struct _finddata_t fileInfo;
-	intptr_t findHandle = _findfirst(path, &fileInfo); 
+	int findHandle = _findfirst(path, &fileInfo); 
 
 	// Check if a file or directory exists with this name
 	if(findHandle == -1)
@@ -116,6 +120,52 @@ bool File::IsDirectory(const char *path)
 		// Check that this is a directory
 		if(S_ISDIR(fileInfo.st_mode))
 			return true;
+	}
+
+	return false;
+
+#endif
+}
+
+// Check if the path points to an existing file
+bool File::IsFile(const char *path, size_t *size)
+{
+#ifdef WIN32
+
+	struct _finddata_t fileInfo;
+	int findHandle = _findfirst(path, &fileInfo); 
+
+	// check if a file or directory exists with this name
+	if(findHandle == -1)
+	{
+		_findclose(findHandle);
+		return false;
+	}
+
+	// check for file
+	bool file = IsFile(&fileInfo);
+
+	if(size != NULL)
+		*size = fileInfo.size;
+
+	_findclose(findHandle);
+
+	return file;
+
+#else
+
+	struct stat fileInfo;
+
+	if(stat(path, &fileInfo) != -1)
+	{
+		// check that this is a file
+		if(S_ISREG(fileInfo.st_mode))
+		{
+			if(size != NULL)
+				*size = fileInfo.st_size;
+
+			return true;
+		}
 	}
 
 	return false;
@@ -163,10 +213,10 @@ void File::FindDir(const char *dir_template, std::string &dir)
 	if(dir_template == NULL)
 		return;
 
-#if defined(WIN32) || defined(WIN64)
+#ifdef WIN32
 
 	struct _finddata_t fileInfo;
-	intptr_t findHandle = _findfirst(dir_template, &fileInfo); 
+	int findHandle = _findfirst(dir_template, &fileInfo); 
 
 	// Check if a file or directory exists with this template
 	if(findHandle != -1)
@@ -177,7 +227,10 @@ void File::FindDir(const char *dir_template, std::string &dir)
 	}
 
 	_findclose(findHandle);
-
+//#else
+//	QDirIterator it(dir.c_str(), QStringList() << dir_template, QDir::Dirs, QDirIterator::Subdirectories|QDirIterator::FollowSymlinks);
+//	if (it.hasNext())
+//    	dir = it.next().toStdString();
 #endif
 }
 
@@ -246,15 +299,13 @@ int File::GetExtensionPosition(const char *path)
 }
 
 // Get the size of the file
-int File::GetFileSize(const char* file)
+int64_t File::GetFileSize(const char* file)
 {
-	int size = -1;
-
 	if(file == NULL)
 		return -1;
 
 #if defined(WIN32) || defined(WIN64)
-
+	int64_t size = -1;
 	struct _finddata_t fileData;
 
 	// define the file size to allocate buffer
@@ -265,12 +316,11 @@ int File::GetFileSize(const char* file)
 		return -1;
 	}
 
-	size = (int)fileData.size;
+	size = fileData.size;
 
 	_findclose(findHandle);
-
 #else
-
+	off_t size = -1;
 	struct stat info;
   
 	if(stat(file, &info) != -1)
@@ -279,14 +329,13 @@ int File::GetFileSize(const char* file)
 		if(S_ISREG(info.st_mode))
  			size = info.st_size;
 	}
-
 #endif
 
 	return size;
 }
 
 // Get content of the file (without terminating with 'x0')
-int File::GetContent(const char *file, void *input, size_t len)
+int File::GetContent(const char *file, void *input, int64_t len)
 {
 	if(file == NULL)
 		return -1;
@@ -297,7 +346,7 @@ int File::GetContent(const char *file, void *input, size_t len)
 #if defined(WIN32) || defined(WIN64)
 	fileHandle = _open(file, _O_RDONLY | _O_BINARY);	
 #else
-	fileHandle = open(file, O_RDONLY);    
+	fileHandle = open(file, O_RDONLY);
 #endif
 
 	if(fileHandle == -1)
@@ -306,7 +355,7 @@ int File::GetContent(const char *file, void *input, size_t len)
 	}
 
 	// Read the file content to the buffer
-	int bytesRead = _read(fileHandle, input, len);
+	ssize_t bytesRead = _read(fileHandle, input, len);
 	if(bytesRead == -1)
 	{
 		_close(fileHandle);
@@ -319,6 +368,38 @@ int File::GetContent(const char *file, void *input, size_t len)
 	return 0;
 }
 
+#if 0
+// Get relative name
+std::string File::GetRelativeName(const char* base, const char *file)
+{
+	std::string relative;
+
+	if(base == NULL || file == NULL)
+		return relative;
+
+	int i = 0; 
+	int sep_pos = 0;
+
+	// Skip equal leading directories
+	while(base[i] != '\x0' && file[i] != '\x0' && base[i] == file[i])
+	{
+		// Save the position of last directory separator
+		if(file[i] == DIR_SEPARATOR_CHAR)
+			sep_pos = i + 1;
+
+		i++;
+	}
+
+	// If equal return file name
+	if(file[i] == '\x0')
+		relative = file + sep_pos;
+	else
+		relative = file + i;
+
+	return relative;
+}
+#endif
+
 // Get relative name
 std::string File::GetRelativeName(const char* base, const char *file)
 {
@@ -328,7 +409,11 @@ std::string File::GetRelativeName(const char* base, const char *file)
 		return relative;
 
 	// If base and file are equal return the file name
+	#ifdef WIN32
 	if(_stricmp(base, file))
+	#else
+	if(strcasecmp(base, file))
+	#endif
 	{
 		int pos = File::GetLastDirSeparatorPos(file);
 		relative = (pos > 0) ? file + pos + 1 : file;
@@ -339,13 +424,39 @@ std::string File::GetRelativeName(const char* base, const char *file)
 	return relative;
 }
 
+// Write the buffer to the file
+long File::Write(const char *file, const char* content, int64_t size)
+{
+	 if(file == NULL || content == NULL)
+		return -1;
+
+#if defined(WIN32) || defined(WIN64)
+  // open the file
+  // if _S_IWRITE is not set, the Read Only file is created (at least on Windows)
+  int fileh = _open(file, _O_CREAT | _O_RDWR | _O_BINARY | _O_TRUNC, _S_IREAD | _S_IWRITE);
+#else
+  // open the file
+  int fileh = open(file, O_CREAT | O_RDWR, 0666);
+#endif
+
+   if(fileh == -1)
+	   return -1;
+
+   // write the content to the file 
+   long rc = _write(fileh, content, size);
+ 
+   _close(fileh);
+
+   return rc;
+}
+
 // Create directories (supports nested directories)
 void File::CreateDirectories(const char *path)
 {
 	if(path == NULL)
 		return;
 
-	size_t i = 0;
+	int i = 0;
 
 	// Skip initial / in absolute on Unix, and X:\ on Windows
 	if(path[i] == '/')
@@ -394,32 +505,8 @@ void File::CreateDirectories(const char *path)
 			}
 		}
 	}
-}
 
-// Write the buffer to the file
-int File::Write(const char *file, const char* content, size_t size)
-{
-	 if(file == NULL || content == NULL)
-		return -1;
-
-#if defined(WIN32) || defined(WIN64)
-  // open the file
-  // if _S_IWRITE is not set, the Read Only file is created (at least on Windows)
-  int fileh = _open(file, _O_CREAT | _O_RDWR | _O_BINARY | _O_TRUNC, _S_IREAD | _S_IWRITE);
-#else
-  // open the file
-  int fileh = open(file, O_CREAT | O_RDWR, 0666);
-#endif
-
-   if(fileh == -1)
-	   return -1;
-
-   // write the content to the file 
-   int rc = _write(fileh, content, size);
- 
-   _close(fileh);
-
-   return rc;
+	return;
 }
 
 // Truncate the file (empty file will be created)
@@ -432,17 +519,18 @@ int File::Truncate(const char *file)
   // if _S_IWRITE is not set, the Read Only file is created (at least on Windows)
   int fileh = _open(file, _O_CREAT | _O_RDWR | _O_BINARY | _O_TRUNC, _S_IREAD | _S_IWRITE);
 #else
+  // open the file
   int fileh = open(file, O_CREAT | O_RDWR, 0666);
 #endif
 
    if(fileh == -1)
 	   return -1;
- 
+
    return _close(fileh);
 }
 
 // Append data to the existing file
-int File::Append(const char *file, const char *data, unsigned int len)
+long File::Append(const char *file, const char *data, int64_t len)
 {
 	if(file == NULL || data == NULL || len == 0)
 		return -1;
@@ -456,8 +544,8 @@ int File::Append(const char *file, const char *data, unsigned int len)
    if(fileh == -1)
 	   return -1;
 
-   int rc = _write(fileh, data, len);
+   ssize_t rc = _write(fileh, data, len);
    _close(fileh);
- 
+
    return rc;
 }

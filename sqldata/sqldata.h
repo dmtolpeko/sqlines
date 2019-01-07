@@ -30,8 +30,8 @@
 #include <queue>
 #include <map>
 #include "sqldb.h"
-#include "parameters.h"
-#include "applog.h"
+#include "../sqlcommon/parameters.h"
+#include "../sqlcommon/applog.h"
 
 #define SQLDATA_NAME  		        "SQLines Data"	
 #define SQLDATA_VERSION_NUMBER		"3.1.737"	

@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-#include <QtGui/QApplication>
+//#include <QtGui/QApplication>
+#include <QtWidgets/QApplication>
+//#include <QApplication>
 #include <QStyle>
 #include <QStyleFactory>
 

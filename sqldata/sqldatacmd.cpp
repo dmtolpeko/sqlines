@@ -25,10 +25,10 @@
 
 #include <stdio.h>
 #include "sqldatacmd.h"
-#include "str.h"
+#include "../sqlcommon/str.h"
 #include "sqldb.h"
-#include "os.h"
-#include "file.h"
+#include "../sqlcommon/os.h"
+#include "../sqlcommon/file.h"
 
 // Constructor
 SqlDataCmd::SqlDataCmd()
@@ -378,11 +378,11 @@ void SqlDataCmd::CallbackTransfer(SqlDataReply *reply)
 
 			std::string table_diff = reply->_s_name;
 			table_diff += " (";
-			table_diff += Str::IntToString(reply->_s_int1, row_fmt);
+			table_diff += Str::LongToString(reply->_s_int1, row_fmt);
 			table_diff += " rows read, ";
-			table_diff += Str::IntToString(reply->_t_int1, row_fmt);
+			table_diff += Str::LongToString(reply->_t_int1, row_fmt);
 			table_diff += " rows written, ";
-			table_diff += Str::IntToString(abs(reply->_s_int1 - reply->_t_int1), row_fmt);
+			table_diff += Str::LongToString(abs(reply->_s_int1 - reply->_t_int1), row_fmt);
 			table_diff += " rows difference)";
 
 			_tables_read_write_diff_list.push_back(table_diff);
@@ -724,9 +724,9 @@ void SqlDataCmd::CallbackValidationRowCount(SqlDataReply *reply)
 
 			table_diff = reply->_s_name;
 			table_diff += " (";
-			table_diff += Str::IntToString(reply->_s_int1, row_fmt);
+			table_diff += Str::LongToString(reply->_s_int1, row_fmt);
 			table_diff += " rows in source, ";
-			table_diff += Str::IntToString(reply->_t_int1, row_fmt);
+			table_diff += Str::LongToString(reply->_t_int1, row_fmt);
 			table_diff += " rows in target)";
 
 			_tables_diff_list.push_back(table_diff);
@@ -1236,7 +1236,7 @@ int SqlDataCmd::GetObjectsFromFile(std::list<std::string> &tables)
 		return -1;
 
 	// Configuration file size
-	int size = File::GetFileSize(_tf.c_str());
+	int64_t size = File::GetFileSize(_tf.c_str());
 
 	if(size == -1)
 		return -1;
@@ -1246,7 +1246,7 @@ int SqlDataCmd::GetObjectsFromFile(std::list<std::string> &tables)
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(_tf.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return -1;
 	}
 
@@ -1277,7 +1277,7 @@ int SqlDataCmd::GetObjectsFromFile(std::list<std::string> &tables)
 		tables.push_back(name);
 	}
 
-	delete input;
+	delete[] input;
 
 	return 0;
 }
@@ -1286,7 +1286,7 @@ int SqlDataCmd::GetObjectsFromFile(std::list<std::string> &tables)
 int SqlDataCmd::GetQueriesFromFile(std::string &file, std::map<std::string, std::string> &queries)
 {
 	// Configuration file with WHERE conditions
-	int size = File::GetFileSize(file.c_str());
+	int64_t size = File::GetFileSize(file.c_str());
 
 	if(size == -1)
 		return -1; 
@@ -1296,7 +1296,7 @@ int SqlDataCmd::GetQueriesFromFile(std::string &file, std::map<std::string, std:
 	// Get content of the file (without terminating 'x0')
 	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
 	{
-		delete input;
+		delete[] input;
 		return -1;
 	}
 
@@ -1348,7 +1348,7 @@ int SqlDataCmd::GetQueriesFromFile(std::string &file, std::map<std::string, std:
 int SqlDataCmd::SetParameters()
 {
 	// Get -out option
-	char *value = _parameters.Get(OUT_OPTION);
+	const char *value = _parameters.Get(OUT_OPTION);
 
 	if(value != NULL)
 	{

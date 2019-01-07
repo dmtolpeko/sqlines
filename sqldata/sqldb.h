@@ -32,9 +32,9 @@
 #include <sqltypes.h>
 
 #include "sqlapibase.h"
-#include "parameters.h"
-#include "applog.h"
-#include "os.h"
+#include "../sqlcommon/parameters.h"
+#include "../sqlcommon/applog.h"
+#include "../sqlcommon/os.h"
 
 // Databases against which execute operation
 #define SQLDB_BOTH							1
@@ -127,10 +127,10 @@ struct SqlDbThreadCa
 	const char *_name;
 
 	// Command in/out data (depends on the command type)
-	int _int1;
-	int _int2;
-	int _int3;
-	int _int4;
+	long _int1;
+	long _int2;
+	long _int3;
+	long _int4;
 	void *_void1;
 	void *_void2;
 
@@ -209,13 +209,13 @@ struct SqlDataReply
 	char t_o_name[1024];
 
 	// Command result data (depends on the command type)
-	int _int1;
-	int _int2;
-	int _int3;
-	int _s_int1;
-	int _s_int2;
-	int _t_int1;
-	int _t_int2;
+	long _int1;
+	long _int2;
+	long _int3;
+	long _s_int1;
+	long _s_int2;
+	long _t_int1;
+	long _t_int2;
 	__int64 _s_bigint1;
 	__int64 _t_bigint1;
 
@@ -273,7 +273,7 @@ class SqlDb
 	void *_callback_object;
 
 	// How often "In Progress" notifications are sent
-	int _callback_rate;
+	size_t _callback_rate;
 
 	// SqlDb object that read database schema
 	SqlDb *_metaSqlDb;
@@ -294,7 +294,7 @@ class SqlDb
 	int _validation_not_equal_max_rows;
 	int _validation_datetime_fraction;
 
-	char *_mysql_validation_collate;
+	const char *_mysql_validation_collate;
 	
 	bool _trace_diff_data;
 	AppLog _trace_diff;
@@ -341,7 +341,7 @@ public:
 	int ValidateRowCount(SqlDataReply &reply);
 	// Validate data in rows
 	int ValidateRows(SqlDataReply &reply);
-	int ValidateCompareRows(SqlCol *s_cols, SqlCol *t_cols, int s_col_count, int *s_bytes, int t_col_count, int s_rows, int t_rows, int *t_bytes, int running_rows, int running_not_equal_rows);
+	int ValidateCompareRows(SqlCol *s_cols, SqlCol *t_cols, long s_col_count, long *s_bytes, long t_col_count, long s_rows, long t_rows, long *t_bytes, long running_rows, long running_not_equal_rows);
 
 	// Compare string representations of numbers .5 and 0.50
 	bool ValidateCompareNumbers(SqlCol *s_col, const char *s_string, int s_len, SqlCol *t_col, const char *t_string, int t_len, int *equal);
@@ -352,8 +352,8 @@ public:
 	// Compare LOB values
 	bool ValidateCompareLobs(SqlCol *s_col, int s_len, SqlCol *t_col, int t_len, int *equal);
 	// Dump differences in column
-	void ValidateDiffDump(SqlCol *s_col, SqlCol *t_col, int row, int s_len, int t_len, char *s_string, char *t_string);
-	void ValidateDiffDumpValue(int len, char *str);
+	void ValidateDiffDump(SqlCol *s_col, SqlCol *t_col, long row, long s_len, long t_len, char *s_string, char *t_string);
+	void ValidateDiffDumpValue(long len, char *str);
 
 	// Assess table rows
 	int AssessRows(SqlDataReply &reply);
@@ -443,9 +443,9 @@ private:
 	int InitCa(SqlDbThreadCa *ca, SqlApiBase *db_api);
 
 	// Copy column definitions and buffers
-	int CopyColumns(SqlCol *cols, SqlCol **cols_copy, size_t col_count, size_t allocated_array_rows);
+	int CopyColumns(SqlCol *cols, SqlCol **cols_copy, long col_count, long allocated_array_rows);
 	// Copy data
-	int	CopyColumnData(SqlCol *s_cols, SqlCol *t_cols, size_t col_count, int rows_fetched);
+	int	CopyColumnData(SqlCol *s_cols, SqlCol *t_cols, long col_count, long rows_fetched);
 
 #if defined(WIN32) || defined(WIN64)
 	// Start a worker thread

@@ -4250,7 +4250,7 @@ bool SqlParser::ParseFunctionDateFormat(Token *name, Token* /*open*/)
 	if(format->type == TOKEN_STRING)
 	{
 		TokenStr out;
-		size_t i = 0;
+		int64_t i = 0;
 
 		while(i < format->len)
 		{
@@ -11786,7 +11786,7 @@ bool SqlParser::ParseFunctionToChar(Token *name, Token *open)
 		if(Target(SQL_MYSQL) == true)
 		{
 			TokenStr out;
-			size_t i = 0;
+			int64_t i = 0;
 
 			bool datetime = false;
 
@@ -11909,7 +11909,7 @@ bool SqlParser::ParseFunctionToChar(Token *name, Token *open)
 		if(_source == SQL_INFORMIX && Target(SQL_ORACLE, SQL_DB2) == true)
 		{
 			TokenStr out;
-			size_t i = 0;
+			int64_t i = 0;
 
 			while(i < format->len)
 			{
@@ -12089,7 +12089,7 @@ bool SqlParser::ParseFunctionToDate(Token *name, Token *open)
 		if(Target(SQL_MYSQL) == true)
 		{
 			TokenStr out;
-			size_t i = 0;
+			int64_t i = 0;
 
 			while(i < format->len)
 			{

@@ -23,16 +23,16 @@
 // Transform format string with parameters to concatenation expression
 void SqlParser::PostgresFormatToConcat(Token *format, ListW &params)
 {
-	if(format == NULL && format->len > 0)
+	if((format == NULL) || ((format->str == NULL) && (format->len > 0)))
 		return;
 
 	ListwItem *list = params.GetFirst();
 
 	TokenStr str("'", L"'", 1);
 
-	size_t num = 0;
+	int64_t num = 0;
 
-	for(size_t i = 1; i < format->len - 1; i++)
+	for(int64_t i = 1; i < format->len - 1; i++)
 	{
 		// Next placeholder % matched
 		if(format->Compare('%', L'%', i) == true)

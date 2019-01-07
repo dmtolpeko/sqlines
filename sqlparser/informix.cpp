@@ -151,7 +151,7 @@ void SqlParser::InformixConvertReturning(Token *create, Token *procedure)
 		else
 		{
 			// Convert to OUT parameters
-			if(_target == SQL_ORACLE)
+			if(Target(SQL_ORACLE, SQL_POSTGRESQL) == true)
 			{
 				ListwmItem *p =  _spl_returning_out_names.GetFirst();
 
@@ -172,7 +172,8 @@ void SqlParser::InformixConvertReturning(Token *create, Token *procedure)
 					Prepend(datatype, " OUT ", L" OUT ", 5, create);
 
 					// Data type sizes were left, remove them now
-					OracleRemoveDataTypeSize(datatype);
+					if(Target(SQL_ORACLE) == true)
+						OracleRemoveDataTypeSize(datatype);
 
 					if(p != NULL)
 						p = p->next;
@@ -183,7 +184,10 @@ void SqlParser::InformixConvertReturning(Token *create, Token *procedure)
 				// Remove RETURNS/RETURNING
 				Token::ReplaceWithSpaces(_spl_returns);
 			
-				Token::Change(_spl_param_close, ",", L",", 1);
+				if ( _spl_parameters.GetCount() == 0 )
+					Token::Remove(_spl_param_close);
+				else
+					Token::Change(_spl_param_close, ",", L",", 1);
 				Token::Change(_spl_returning_end, ")", L")", 1);
 			}
 		}
@@ -325,7 +329,7 @@ void SqlParser::InformixConvertReturning(Token *create, Token *procedure)
 
 // Define the name of parameter or column to be used for RETURNING value
 void SqlParser::InformixGetReturningName(Token *retvalue, TokenStr &name, const char *prefix, 
-											const wchar_t *wprefix, size_t plen, int num, bool always_prefix)
+											const wchar_t *wprefix, int64_t plen, int num, bool always_prefix)
 {
 	if(retvalue == NULL)
 		return;

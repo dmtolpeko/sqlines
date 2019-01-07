@@ -27,6 +27,14 @@ void* CreateParserObject()
 	return new SqlParser();
 }
 
+void DeleteParserObject(void *parser)
+{
+	if (parser == NULL)
+		return;
+
+	delete (SqlParser*)parser;
+}
+
 void SetParserTypes(void *parser, short source, short target)
 {
 	if(parser == NULL)
@@ -38,7 +46,7 @@ void SetParserTypes(void *parser, short source, short target)
 	sql_parser->SetTypes(source, target);
 }
 
-int ConvertSql(void *parser, const char *input, int size, const char **output, int *out_size, int *lines)
+int ConvertSql(void *parser, const char *input, int64_t size, const char **output, int64_t *out_size, int64_t *lines)
 {
 	if(parser == NULL)
 		return -1;
@@ -77,7 +85,7 @@ int CreateAssessmentReport(void *parser, const char *summary)
 // Free allocated result
 void FreeOutput(const char *output)
 {
-	delete output;
+	delete [] output;
 }
 
 #ifdef WIN32

@@ -38,7 +38,7 @@ void Stats::LogFuncCall(Token *name, Token *end, std::string &cur_file)
 	if(file != NULL)
 	{
 		// Line and source name
-		fprintf(file, "%s,%d,%.*s,", cur_file.c_str(), name->line, name->len, name->str);
+		fprintf(file, "%s,%lld,%.*s,", cur_file.c_str(), name->line, static_cast<int>(name->len), name->str);
 
 		std::string src, src_meta;
 		std::string tgt, tgt_meta;

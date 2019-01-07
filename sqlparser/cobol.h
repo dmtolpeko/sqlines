@@ -106,11 +106,11 @@ public:
 
 	// SqlParser helpers
 	Token* GetNext(const char ch, const wchar_t wch) { return _sqlparser->GetNext(ch, wch); }
-	Token* GetNext(const char *str, const wchar_t *wstr, size_t len) { return _sqlparser->GetNext(str, wstr, len); }
+	Token* GetNext(const char *str, const wchar_t *wstr, int64_t len) { return _sqlparser->GetNext(str, wstr, len); }
 	Token* GetNextToken() { return _sqlparser->GetNextToken(); }
 	Token* GetNextToken(Token *prev);
 	Token* GetNextCharToken(const char ch, const wchar_t wch);
-	Token* GetNextWordToken(const char *str, const wchar_t *wstr, size_t len);
+	Token* GetNextWordToken(const char *str, const wchar_t *wstr, int64_t len);
 	Token* GetNextUntilNewlineToken();
 
 	bool ParseExpression(Token *token, int prev_operator = 0) { return _sqlparser->ParseExpression(token, prev_operator); }
@@ -123,18 +123,18 @@ public:
 
 	void PushBack(Token *token) { return _sqlparser->PushBack(token); }
 	Token *GetLastToken() { return _sqlparser->GetLastToken(); }
-	Token *LookNext(const char *str, const wchar_t *wstr, size_t len) { return _sqlparser->LookNext(str, wstr, len); }
+	Token *LookNext(const char *str, const wchar_t *wstr, int64_t len) { return _sqlparser->LookNext(str, wstr, len); }
 
-	Token* Append(Token *token, const char *str, const wchar_t *wstr, size_t len, Token *format = NULL);
+	Token* Append(Token *token, const char *str, const wchar_t *wstr, int64_t len, Token *format = NULL);
 	Token* AppendCopy(Token *token, Token *append);
 	void Append(Token *token, TokenStr *str, Token *format = NULL) { return _sqlparser->Append(token, str, format); }
-	Token* AppendNoFormat(Token *token, const char *str, const wchar_t *wstr, size_t len) { return _sqlparser->AppendNoFormat(token, str, wstr, len); }
-	void AppendFirstNoFormat(Token *token, const char *str, const wchar_t *wstr, size_t len) { _sqlparser->AppendFirstNoFormat(token, str, wstr, len); }
+	Token* AppendNoFormat(Token *token, const char *str, const wchar_t *wstr, int64_t len) { return _sqlparser->AppendNoFormat(token, str, wstr, len); }
+	void AppendFirstNoFormat(Token *token, const char *str, const wchar_t *wstr, int64_t len) { _sqlparser->AppendFirstNoFormat(token, str, wstr, len); }
 
-	Token* Prepend(Token *token, const char *str, const wchar_t *wstr, size_t len, Token *format = NULL);
+	Token* Prepend(Token *token, const char *str, const wchar_t *wstr, int64_t len, Token *format = NULL);
 	Token* PrependCopy(Token *token, Token *prepend);
 	Token* PrependCopy(Token *token, Token *first, Token *last, bool prepend_removed = true);
-	Token* PrependNoFormat(Token *token, const char *str, const wchar_t *wstr, size_t len) { return _sqlparser->PrependNoFormat(token, str, wstr, len); }
+	Token* PrependNoFormat(Token *token, const char *str, const wchar_t *wstr, int64_t len) { return _sqlparser->PrependNoFormat(token, str, wstr, len); }
 };
 
 #endif // sqlines_cobol_h

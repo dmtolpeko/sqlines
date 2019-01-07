@@ -18,9 +18,9 @@
 
 #include <string.h>
 #include <string>
-#include "str.h"
+#include "../sqlcommon/str.h"
 #include "sqlsncapi.h"
-#include "os.h"
+#include "../sqlcommon/os.h"
 
 // MySQL C API definitions
 #include <mysql.h>
@@ -230,7 +230,7 @@ int SqlSncApi::Connect(size_t *time_spent)
 		conn += "Trusted_Connection=yes;";
 
 	// Connection string must not contain spaces between parameters, =, values etc.
-	rc = _SQLDriverConnect(_hdbc, NULL, (SQLCHAR*)conn.c_str(), SQL_NTS, NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
+	rc = _SQLDriverConnect(_hdbc, NULL, reinterpret_cast<SQLCHAR*>(const_cast<char*>(conn.c_str())), SQL_NTS, NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
 
 	if(rc == SQL_ERROR || rc < 0)
 		SetError(SQL_HANDLE_DBC, _hdbc);
@@ -276,7 +276,7 @@ void SqlSncApi::Deallocate()
 }
 
 // Get row count for the specified object
-int SqlSncApi::GetRowCount(const char *object, int *count, size_t *time_spent)
+int SqlSncApi::GetRowCount(const char *object, long *count, size_t *time_spent)
 {
 	if(object == NULL)
 		return -1;
@@ -292,7 +292,7 @@ int SqlSncApi::GetRowCount(const char *object, int *count, size_t *time_spent)
 }
 
 // Execute the statement and get scalar result
-int SqlSncApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
+int SqlSncApi::ExecuteScalar(const char *query, long *result, size_t *time_spent)
 {
 	SQLHANDLE stmt;
 	int q_result = 0;
@@ -303,7 +303,7 @@ int SqlSncApi::ExecuteScalar(const char *query, int *result, size_t *time_spent)
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -343,7 +343,7 @@ int SqlSncApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -358,8 +358,8 @@ int SqlSncApi::ExecuteNonQuery(const char *query, size_t *time_spent)
 }
 
 // Open cursor and allocate buffers
-int SqlSncApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memory, size_t *col_count, size_t *allocated_array_rows, 
-		int *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> * /*dtmap*/)
+int SqlSncApi::OpenCursor(const char *query, long buffer_rows, long buffer_memory, long *col_count, long *allocated_array_rows, 
+		long *rows_fetched, SqlCol **cols, size_t *time_spent, bool catalog_query, std::list<SqlDataTypeMap> * /*dtmap*/)
 {
 	size_t start = GetTickCount();
 
@@ -367,7 +367,7 @@ int SqlSncApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &_hstmt_cursor);
 
 	// Execute the query
-	rc = _SQLExecDirect(_hstmt_cursor, (SQLCHAR*)query, SQL_NTS);
+	rc = _SQLExecDirect(_hstmt_cursor, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query)), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -391,7 +391,7 @@ int SqlSncApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	_cursor_lob_exists = false;
 
 	// Get column information
-	for(size_t i = 0; i < _cursor_cols_count; i++)
+	for(int i = 0; i < _cursor_cols_count; i++)
 	{
 		SQLSMALLINT native_dt;
 		SQLULEN column_size;
@@ -470,7 +470,7 @@ int SqlSncApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	if(buffer_rows > 0)
 	{
 		// Row length can be large for bound LOB buffers so inforce hard limit of buffer size
-		size_t buffer_rows_max = (100*1024*1024)/row_size;
+		int buffer_rows_max = (100*1024*1024)/row_size;
 
 		if(buffer_rows < buffer_rows_max)
 			_cursor_allocated_rows = buffer_rows;
@@ -480,7 +480,7 @@ int SqlSncApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	else
 	if(buffer_memory > 0)
 	{
-		size_t rows = buffer_memory/row_size;
+		long rows = buffer_memory/row_size;
 		_cursor_allocated_rows = rows > 0 ? rows : 1;
 	}	
 
@@ -488,7 +488,7 @@ int SqlSncApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 		_cursor_allocated_rows = 1;
 
 	// Allocate buffers to each column
-	for(size_t i = 0; i < _cursor_cols_count; i++)
+	for(long i = 0; i < _cursor_cols_count; i++)
 	{
 		// Data type CHAR or VARCHAR
 		if(_cursor_cols[i]._native_dt == SQL_CHAR || _cursor_cols[i]._native_dt == SQL_VARCHAR)
@@ -710,7 +710,7 @@ int SqlSncApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 		if(_cursor_cols[i]._data != NULL)
 		{
 			// Allocate indicators
-			_cursor_cols[i].ind = new size_t[_cursor_allocated_rows];
+			_cursor_cols[i].ind = new long[_cursor_allocated_rows];
 
 			if(_cursor_cols[i]._lob == false)
 			{
@@ -766,7 +766,7 @@ int SqlSncApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 }
 
 // Fetch next portion of data to allocate buffers
-int SqlSncApi::Fetch(int *rows_fetched, size_t *time_spent) 
+int SqlSncApi::Fetch(long *rows_fetched, size_t *time_spent) 
 {
 	if(_cursor_allocated_rows <= 0)
 		return -1;
@@ -779,7 +779,7 @@ int SqlSncApi::Fetch(int *rows_fetched, size_t *time_spent)
 	// Read not bound LOB data (first chunk)
 	if((rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) && _cursor_lob_exists == true)
 	{
-		for(size_t i = 0; i < _cursor_cols_count; i++)
+		for(int i = 0; i < _cursor_cols_count; i++)
 		{
 			if(_cursor_cols[i]._lob == false)
 				continue;
@@ -804,7 +804,7 @@ int SqlSncApi::Fetch(int *rows_fetched, size_t *time_spent)
 }
 
 // Get partial LOB content
-int SqlSncApi::GetLobPart(size_t /*row*/, size_t column, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlSncApi::GetLobPart(long /*row*/, long column, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	SQLLEN ind = 0;
 	
@@ -883,7 +883,7 @@ int SqlSncApi::CloseCursor()
 }
 
 // Initialize the bulk copy from one database into another
-int SqlSncApi::InitBulkTransfer(const char *table, size_t col_count, size_t allocated_array_rows, SqlCol *s_cols, SqlCol **t_cols)
+int SqlSncApi::InitBulkTransfer(const char *table, long col_count, long allocated_array_rows, SqlCol *s_cols, SqlCol **t_cols)
 {
 	if(table == NULL || s_cols == NULL || col_count <= 0)
 		return -1;
@@ -1110,7 +1110,7 @@ int SqlSncApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 }
 
 // Transfer rows between databases
-int SqlSncApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, size_t *bytes_written,
+int SqlSncApi::TransferRows(SqlCol *s_cols, long rows_fetched, long *rows_written, size_t *bytes_written,
 							size_t *time_spent)
 {
 	if(s_cols == NULL || _bcp_cols == NULL || _bcp_cols_count <= 0 || rows_fetched < 0)
@@ -1125,10 +1125,10 @@ int SqlSncApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 	size_t start = GetTickCount();
 
 	// Copy rows
-	for(size_t i = 0; i < rows_fetched; i++)
+	for(int i = 0; i < rows_fetched; i++)
 	{
 		// Copy column data
-		for(size_t k = 0; k < _bcp_cols_count; k++)
+		for(int k = 0; k < _bcp_cols_count; k++)
 		{
 			// BCP indicator is 4-byte on both 32-bit and 64-bit platforms
 			SQLINTEGER *ind = (SQLINTEGER*)_bcp_cols[k]._data;
@@ -1322,7 +1322,7 @@ int SqlSncApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 		}
 	}
 
-	int written = 0;
+	long written = 0;
 
 	if(rc != FAIL)
 	{
@@ -1366,11 +1366,11 @@ int SqlSncApi::WriteLob(SqlCol *s_cols, size_t row, size_t *lob_bytes)
 		return -1;
 
 	int rc = 0;
-	size_t len = 0;
-	size_t row_len = 0;
+	long len = 0;
+	long row_len = 0;
 	char *data = NULL;
 
-	for(size_t k = 0; k < _bcp_cols_count; k++)
+	for(long k = 0; k < _bcp_cols_count; k++)
 	{
 		if(s_cols[k]._lob == false && _bcp_cols[k]._lob == false)
 			continue;
@@ -1385,7 +1385,7 @@ int SqlSncApi::WriteLob(SqlCol *s_cols, size_t row, size_t *lob_bytes)
 			}
 		
 			// LOB contains data
-			rc = _source_api_provider->GetLobLength(row, k, (size_t*)&len);
+			rc = _source_api_provider->GetLobLength(row, k, &len);
 
 			if(rc == -1)
 				break;
@@ -1397,10 +1397,10 @@ int SqlSncApi::WriteLob(SqlCol *s_cols, size_t row, size_t *lob_bytes)
 				continue;
 			}
 
-			data = new char[(size_t)len];
+			data = new char[len];
 
 			// Get LOB content
-			rc = _source_api_provider->GetLobContent(row, k, data, (size_t)len, NULL);
+			rc = _source_api_provider->GetLobContent(row, k, data, len, NULL);
 
 			// Write LOB
 			if(rc != -1)
@@ -1420,7 +1420,7 @@ int SqlSncApi::WriteLob(SqlCol *s_cols, size_t row, size_t *lob_bytes)
 				continue;
 			}
 
-			len = (size_t)s_cols[k]._len_ind4[row];
+			len = s_cols[k]._len_ind4[row];
 
 			// LOB is empty
 			if(len == 0)
@@ -1552,7 +1552,7 @@ int SqlSncApi::CloseBulkTransfer()
 	if(_ins_allocated_rows == 1)
 		_bcp_batch(_hdbc);
 
-	int rows = _bcp_done(_hdbc);
+	long rows = _bcp_done(_hdbc);
 
 	int rc = (rows >= 0) ? 0 : -1;
 
@@ -1636,13 +1636,13 @@ int SqlSncApi::DropReferences(const char* table, size_t *time_spent)
 }
 
 // Get the length of LOB column in the open cursor
-int SqlSncApi::GetLobLength(size_t /*row*/, size_t /*column*/, size_t * /*length*/)
+int SqlSncApi::GetLobLength(long /*row*/, long /*column*/, long * /*length*/)
 {
 	return -1;
 }
 
 // Get LOB content
-int SqlSncApi::GetLobContent(size_t /*row*/, size_t /*column*/, void * /*data*/, size_t /*length*/, int * /*len_ind*/)
+int SqlSncApi::GetLobContent(long /*row*/, long /*column*/, void * /*data*/, long /*length*/, long * /*len_ind*/)
 {
 	return -1;
 }
@@ -1680,11 +1680,11 @@ int SqlSncApi::GetAvailableTables(std::string &table_template, std::string & /*e
 	int rc = _SQLAllocHandle(SQL_HANDLE_STMT, _hdbc, &stmt);
 
 	// Execute the query
-	rc = _SQLExecDirect(stmt, (SQLCHAR*)query.c_str(), SQL_NTS);
+	rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query.c_str())), SQL_NTS);
 
     // The first query may fail (SQL Server 2000 i.e)
 	if(rc < 0)
-		rc = _SQLExecDirect(stmt, (SQLCHAR*)query2.c_str(), SQL_NTS);
+		rc = _SQLExecDirect(stmt, reinterpret_cast<SQLCHAR*>(const_cast<char*>(query2.c_str())), SQL_NTS);
 
 	// Error raised
 	if(rc == -1)
@@ -1780,9 +1780,9 @@ int SqlSncApi::ReadIndexes(const char *select)
 		query += condition;       
 	}
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -1919,9 +1919,9 @@ int SqlSncApi::ReadIndexColumns(const char *select)
     // Sort by column order in the index
     query += " ORDER by i.id, i.indid, i.keyno";
 	
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;
@@ -2156,9 +2156,9 @@ void SqlSncApi::SetVersion()
 	// Microsoft SQL Server 2014 (SP2) (KB3171021) - 12.0.5000.0 (X64) Jun 17 2016 19:14:09 Copyright (c) Microsoft Corporation	Express Edition (64-bit) on Windows NT 6.3 <X64> (Build 10586: )
 	const char *query = "SELECT CAST(@@VERSION AS VARCHAR(300))";
 
-	size_t col_count = 0;
-	size_t allocated_rows = 0;
-	int rows_fetched = 0; 
+	long col_count = 0;
+	long allocated_rows = 0;
+	long rows_fetched = 0; 
 	size_t time_read = 0;
 	
 	SqlCol *cols = NULL;

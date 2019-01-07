@@ -1184,7 +1184,7 @@ bool SqlParser::ParseCommentStatement(Token *comment)
 			Token::ChangeNoFormat(is, "'MS_Description',", L"'MS_Description',", 17);
 
 			int cnt = GetIdentPartsCount(name);
-			size_t len = 0;
+			int64_t len = 0;
 			TokenStr str;
 			TokenStr nm;
 
@@ -1630,7 +1630,7 @@ bool SqlParser::ParseCreateIndex(Token *create, Token *unique, Token *index)
 		ParseExpression(col);
 
 		// For Greenplum, add column to DISTRIBUTED BY in CREATE TABLE
-		if(greenplum_distributed)
+		if(greenplum_distributed && cr_table_end != NULL)
 		{
 			if(count > 0)
 				Append(cr_table_end->book, ", ", L", ", 2);
@@ -2129,7 +2129,7 @@ bool SqlParser::ParseFunctionParameters(Token *function_name)
 			break;
 	}
 
-	/*Token *close */ (void) GetNextCharToken(')', L')');
+	_spl_param_close = GetNextCharToken(')', L')');
 
 	return true;
 }
@@ -5953,7 +5953,7 @@ bool SqlParser::ParseIfStatement(Token *if_, int scope)
 				// Check if BEGIN follows
 				Token *next_begin = GetNext("BEGIN", L"BEGIN", 5);
 
-				if(next_begin == false)
+				if(next_begin == NULL)
 				{
 					Token::Change(then, "BEGIN", L"BEGIN", 5);
 					then_to_begin = true;
@@ -7670,7 +7670,7 @@ bool SqlParser::ParseReturnStatement(Token *return_)
 		if(_spl_returning_datatypes.GetCount() > 1)
 		{
 			// Use separate assignment statements for OUT variables in Oracle
-			if(_spl_scope == SQL_SCOPE_PROC && num > 0 && Target(SQL_ORACLE) == true)
+			if( ( _spl_scope == SQL_SCOPE_PROC || _spl_scope == SQL_SCOPE_FUNC ) && num > 0 && Target(SQL_ORACLE, SQL_POSTGRESQL) == true)
 			{
 				InformixReturnToAssignment(return_list);
 
@@ -9208,32 +9208,9 @@ bool SqlParser::ParseFunctionReturns(Token *function)
 		ParseDataType(data_type, SQL_SCOPE_FUNC_PARAMS);
 	}
 	else
-	// RETURNS in SQL Server, DB2, PostgreSQL, MySQL, Informix
-	if(_source != SQL_INFORMIX && Token::Compare(returns, "RETURNS", L"RETURNS", 7) == true)
-	{
-		// Change to RETURN in Oracle
-		if(_target == SQL_ORACLE)
-			Token::Change(returns, "RETURN", L"RETURN", 6);
-
-		// Return data type
-		Token *data_type = GetNextToken();
-
-		// Check for 'void' data type in PostgreSQL meaning stored procedure
-		if(Token::Compare(data_type, "VOID", L"VOID", 4) == true)
-		{
-			// If not PostgreSQL convert to procedure and remove return clause
-			if(_target != SQL_POSTGRESQL)
-			{
-				Token::Change(function, "PROCEDURE", L"PROCEDURE", 9);
-				Token::Remove(returns, data_type);
-			}
-		}
-		else
-			ParseDataType(data_type, SQL_SCOPE_FUNC_PARAMS);
-	}
-	else
 	// RETURNS or RETURNING in Informix
-	if(Token::Compare(returns, "RETURNING", L"RETURNING", 9) == true)
+	if(Token::Compare(returns, "RETURNING", L"RETURNING", 9) == true ||
+	   Token::Compare(returns, "RETURNS", L"RETURNS", 7) == true )
 	{
 		_spl_returns = returns;
 
@@ -9478,7 +9455,33 @@ bool SqlParser::ParseFunctionOptions()
 			exists = true;
 			continue;
 		}
-		
+		// WITH ( options ) in PostgreSQL
+		if(next->Compare("WITH", L"WITH", 4) == true)
+		{
+			if(_target == SQL_POSTGRESQL)
+			{
+				Token *open = GetNextCharToken('(', L'(');
+				if ( open )
+				{
+					Token *negate = GetNextWordToken("NOT", L"NOT", 3);
+					if ( negate ) {
+						Token *variant = GetNextWordToken("VARIANT", L"VARIANT", 7);
+						if ( variant )
+						{
+							Token::Remove(next, negate);
+							Token::Change(variant, "IMMUTABLE", L"IMMUTABLE", 9);
+						}
+					}
+					Token *close = GetNextCharToken(')', L')');
+					Token *semicolon = GetNextCharToken(';', L';');
+					Token::Remove(close, semicolon);
+				}
+			}
+
+			exists = true;
+			continue;
+		}
+
 		// Not a function option
 		PushBack(next);
 		break;

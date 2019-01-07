@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "token.h"
-#include "str.h"
+#include "../sqlcommon/str.h"
 
 // Constructor/destructor
 Token::Token()
@@ -59,15 +59,15 @@ Token::~Token()
 	// Delete source values only if allocated flag is set
 	if(source_allocated == true)
 	{
-		delete str;
-		delete wstr;
+		delete[] str;
+		delete[] wstr;
 		str = NULL;
 		wstr = NULL;
 	}
 
 	// Delete target values
-	delete t_str;
-	delete t_wstr;
+	delete[] t_str;
+	delete[] t_wstr;
 	t_str = NULL;
 	t_wstr = NULL;
 }
@@ -102,17 +102,17 @@ Token* Token::GetCopy(Token *source)
 }
 
 // Compare token value with the specified word
-bool Token::Compare(const char *word, const wchar_t *w_word, size_t len)
+bool Token::Compare(const char *word, const wchar_t *w_word, int64_t len)
 {
 	return Token::Compare(this, word, w_word, len);
 }
 
-bool Token::Compare(const char *word, const wchar_t *w_word, size_t start, size_t len)
+bool Token::Compare(const char *word, const wchar_t *w_word, int64_t start, int64_t len)
 {
 	return Token::Compare(this, word, w_word, start, len);
 }
 
-bool Token::Compare(Token *token, const char *word, const wchar_t * /*w_word*/, size_t len)
+bool Token::Compare(Token *token, const char *word, const wchar_t * /*w_word*/, int64_t len)
 {
 	if(token == NULL)
 		return false;
@@ -124,7 +124,7 @@ bool Token::Compare(Token *token, const char *word, const wchar_t * /*w_word*/, 
 }
 
 // Compare token fragment
-bool Token::Compare(Token *token, const char *word, const wchar_t * /*w_word*/, size_t start, size_t len)
+bool Token::Compare(Token *token, const char *word, const wchar_t * /*w_word*/, int64_t start, int64_t len)
 {
 	if(token == NULL)
 		return false;
@@ -136,7 +136,7 @@ bool Token::Compare(Token *token, const char *word, const wchar_t * /*w_word*/, 
 }
 
 // Compare token fragment (case sensitive)
-bool Token::CompareCS(Token *token, const char *word, const wchar_t * /*w_word*/, size_t start, size_t len)
+bool Token::CompareCS(Token *token, const char *word, const wchar_t * /*w_word*/, int64_t start, int64_t len)
 {
 	if(token == NULL)
 		return false;
@@ -153,7 +153,7 @@ bool Token::Compare(const char ch, const wchar_t wch)
 	return Token::Compare(this, ch, wch);
 }
 
-bool Token::Compare(const char ch, const wchar_t wch, size_t start)
+bool Token::Compare(const char ch, const wchar_t wch, int64_t start)
 {
 	return Token::Compare(this, ch, wch, start);
 }
@@ -169,7 +169,7 @@ bool Token::Compare(Token *token, const char ch, const wchar_t wch)
 	return false;
 }
 
-bool Token::Compare(Token *token, const char ch, const wchar_t wch, size_t start)
+bool Token::Compare(Token *token, const char ch, const wchar_t wch, int64_t start)
 {
 	if(token == NULL || token->len <= start)
 		return false;
@@ -201,7 +201,7 @@ bool Token::Compare(Token *first, Token *second)
 	return false;
 }
 
-bool Token::Compare(Token *first, Token *second, size_t len)
+bool Token::Compare(Token *first, Token *second, int64_t len)
 {
 	if(first == NULL || second == NULL)
 		return false;
@@ -232,7 +232,7 @@ bool Token::Compare(Token *first, TokenStr *second)
 }
 
 // Compare with the target value
-bool Token::CompareTarget(Token *token, const char *word, const wchar_t * /*w_word*/, size_t len)
+bool Token::CompareTarget(Token *token, const char *word, const wchar_t * /*w_word*/, int64_t len)
 {
 	if(token == NULL || token->t_len != len)
 		return false;
@@ -249,7 +249,7 @@ bool Token::IsNumeric()
 	if(str == NULL)
 		return false;
 
-	for(size_t i = 0; i < len; i++)
+	for(int64_t i = 0; i < len; i++)
 	{
 		// Sign is allowed in the first position
 		if(i == 0 && (str[i] == '-' || str[i] == '+'))
@@ -272,7 +272,7 @@ bool Token::IsNumericInString()
 	if(len == 2)
 		return false;
 
-	for(size_t i = 1; i < len - 1; i++)
+	for(int64_t i = 1; i < len - 1; i++)
 	{
 		// Sign is allowed in the first position after '
 		if(i == 1 && (str[i] == '-' || str[i] == '+'))
@@ -312,7 +312,7 @@ bool Token::IsBlank(Token *token)
 	return false;
 }
 
-void Token::Change(Token *token, const char *new_str, const wchar_t * /*new_wstr*/, size_t len, Token *format)
+void Token::Change(Token *token, const char *new_str, const wchar_t * /*new_wstr*/, int64_t len, Token *format)
 {
 	if(token == NULL)
 		return;
@@ -329,9 +329,9 @@ void Token::Change(Token *token, const char *new_str, const wchar_t * /*new_wstr
 		if(newline != NULL)
 		{
 			char *newline_win = new char[len*2 + 1];
-			size_t len_win = 0;
+			int64_t len_win = 0;
 
-			for(size_t i = 0; i < len; i++)
+			for(int64_t i = 0; i < len; i++)
 			{
 				if(new_str[i] == '\n')
 				{
@@ -368,10 +368,16 @@ void Token::Change(Token *token, int value)
 
 	Token::ClearTarget(token);
 
-	token->t_str = new char[11];
-	sprintf((char*)token->t_str, "%d", value);
+	int64_t size = snprintf(NULL, 0, "%d", value);
+	token->t_str = new char[size+1];
 
-	token->t_len = strlen(token->t_str);
+	if (token->t_str != NULL) {
+		snprintf(const_cast<char*>(token->t_str), size, "%d", value);
+		const_cast<char*>(token->t_str)[size] = 0;
+		token->t_len = strlen(token->t_str);
+	} else {
+		token->t_len = 0;
+	}
 }
 
 void Token::Change(Token *token, Token *values)
@@ -395,7 +401,7 @@ void Token::Change(Token *token, Token *values)
 	}
 }
 
-void Token::ChangeNoFormat(Token *token, const char *new_str, const wchar_t * /*new_wstr*/, size_t len)
+void Token::ChangeNoFormat(Token *token, const char *new_str, const wchar_t * /*new_wstr*/, int64_t len)
 {
 	if(token == NULL)
 		return;
@@ -421,7 +427,7 @@ void Token::ChangeNoFormat(Token *token, TokenStr &tstr)
 	token->t_len = tstr.len;
 }
 
-void Token::ChangeNoFormat(Token *token, Token *source, size_t start, size_t len)
+void Token::ChangeNoFormat(Token *token, Token *source, int64_t start, int64_t len)
 {
 	if(token == NULL || source == NULL)
 		return;
@@ -448,10 +454,10 @@ void Token::FormatTargetValue(Token *token, Token *format)
 	bool first_upper = true;
 	bool others_lower = true;
 
-	size_t len = token->len;
+	int64_t len = token->len;
 
 	const char *src = token->str;
-	char *tgt = (char*)token->t_str;
+	char *tgt = const_cast<char*>(token->t_str);
 
 	if(format != NULL && format->str != NULL)
 	{
@@ -463,10 +469,10 @@ void Token::FormatTargetValue(Token *token, Token *format)
 		return;
 
 	// Define whether the source value contains all chars in upper or lowercase
-	for(size_t i = 0; i < len; i++)
+	for(int64_t i = 0; i < len; i++)
 	{
-		// Check for a letter (English ASCII only), src is signed so check for negative values
-		if(src[i] > 0 && src[i] < 128 && isalpha(src[i]) != 0)
+		// Check for a letter (English ASCII only)
+		if(isalpha(src[i]) != 0)
 		{
 			// Check for lower case letter
 			if(src[i] >= 'a' && src[i] <= 'z')
@@ -593,14 +599,14 @@ void Token::ReplaceWithSpaces(Token *token)
 
 	TokenStr str;
 
-	for(size_t i = 0; i < token->len; i++)
+	for(int64_t i = 0; i < token->len; i++)
 		str.Append(" ", L" ", 1);
 
 	ChangeNoFormat(token, str);
 }
 
 // Get the target length of the token
-size_t Token::GetTargetLength()
+int64_t Token::GetTargetLength()
 {
 	if(flags & TOKEN_REMOVED)
 		return 0;
@@ -627,7 +633,7 @@ void Token::ClearTarget(Token *token)
 	// Remove the current target value if set
 	if(token->t_str != NULL)
 	{
-		delete token->t_str;
+		delete[] token->t_str;
 
 		token->t_str = NULL;
 		token->t_len = 0;
@@ -635,12 +641,12 @@ void Token::ClearTarget(Token *token)
 }
 
 // Append data to the string
-void Token::AppendTarget(char *string, int *cur_len)
+void Token::AppendTarget(char *string, int64_t *cur_len)
 {
 	if(string == NULL || cur_len == NULL)
 		return;
 
-	int clen = *cur_len;
+	int64_t clen = *cur_len;
 
 	// Token was deleted
 	if(flags & TOKEN_REMOVED)
@@ -700,7 +706,7 @@ int Token::GetInt()
 	return GetInt(0, len);
 }
 
-int Token::GetInt(size_t start, size_t l)
+int Token::GetInt(int64_t start, int64_t l)
 {
 	int out = -1;
 
@@ -742,7 +748,7 @@ TokenStr::TokenStr(Token *token)
 	next = NULL;
 }
 
-void TokenStr::Set(const char *s, const wchar_t *w, size_t l)
+void TokenStr::Set(const char *s, const wchar_t *w, int64_t l)
 {
 	// It is possible that only one part is set (ASCII or Unicode)
 	if(s != NULL)
@@ -763,7 +769,7 @@ void TokenStr::Set(TokenStr &src)
 }
 
 // Append a string
-void TokenStr::Append(const char *s, const wchar_t *w, size_t l)
+void TokenStr::Append(const char *s, const wchar_t *w, int64_t l)
 {
 	if(s == NULL || w == NULL)
 		return;
@@ -774,22 +780,22 @@ void TokenStr::Append(const char *s, const wchar_t *w, size_t l)
 	len += l;
 }
 
-void TokenStr::Append(Token *token, size_t start, size_t l)
+void TokenStr::Append(Token *token, int64_t start, int64_t l)
 {
 	if(token == NULL || start >= token->len)
 		return;
 
 	// Target value has priority
-	if(token->t_str != NULL)
-		str.append(token->t_str + start, l); 
-	else
-	if(token->str != NULL)
-		str.append(token->str + start, l); 
-	else
-	if(token->wstr != NULL)
+	if((token->t_str != NULL) && (start < token->t_len)) {
+		str.append(token->t_str + start, l);
+		len += l;
+	} else if(token->str != NULL) {
+		str.append(token->str + start, l);
+		len += l;
+	} else if(token->wstr != NULL) {
 		wstr.append(token->wstr + start, l); 
-
-	len += l;
+		len += l;
+	}
 }
 
 void TokenStr::Append(Token *token)
@@ -825,7 +831,7 @@ void TokenStr::Append(Token *token)
 
 void TokenStr::Append(TokenStr &in_str)
 {
-	size_t ln = in_str.str.size();
+	int64_t ln = in_str.str.size();
 
 	if(ln > 0)
 	{
@@ -840,15 +846,15 @@ void TokenStr::Append(TokenStr &in_str)
 	}
 }
 
-void TokenStr::Append(TokenStr &tokenstr, size_t start, size_t l)
+void TokenStr::Append(TokenStr &tokenstr, int64_t start, int64_t l)
 {
 	if(start >= tokenstr.len)
 		return;
 
-	if(tokenstr.str.size() > start + l)
+	if(int64_t(tokenstr.str.size()) > start + l)
 		str.append(tokenstr.str.c_str() + start, l); 
 	else
-	if(tokenstr.wstr.size() > start + l)
+	if(int64_t(tokenstr.wstr.size()) > start + l)
 		wstr.append(tokenstr.wstr.c_str() + start, l);
 
 	len += l;
@@ -860,7 +866,7 @@ void TokenStr::Append(int num)
 
 	sprintf(s, "%d", num);
 
-	size_t l = strlen(s);
+	int64_t l = strlen(s);
 
 	if(l > 0)
 	{
@@ -869,12 +875,12 @@ void TokenStr::Append(int num)
 	}
 }
 
-bool TokenStr::Compare(const char *word, const wchar_t *w_word, size_t len)
+bool TokenStr::Compare(const char *word, const wchar_t *w_word, int64_t len)
 {
 	return TokenStr::Compare(this, word, w_word, len);
 }
 
-bool TokenStr::Compare(const char ch, const wchar_t wch, size_t pos)
+bool TokenStr::Compare(const char ch, const wchar_t wch, int64_t pos)
 {
 	return TokenStr::Compare(this, ch, wch, pos);
 }
@@ -894,7 +900,7 @@ bool TokenStr::Compare(TokenStr &first, TokenStr &second)
 	return false;
 }
 
-bool TokenStr::Compare(TokenStr *tokenstr, const char *word, const wchar_t * /*w_word*/, size_t len)
+bool TokenStr::Compare(TokenStr *tokenstr, const char *word, const wchar_t * /*w_word*/, int64_t len)
 {
 	if(tokenstr == NULL || tokenstr->len != len)
 		return false;
@@ -905,7 +911,7 @@ bool TokenStr::Compare(TokenStr *tokenstr, const char *word, const wchar_t * /*w
 	return false;
 }
 
-bool TokenStr::Compare(TokenStr *tokenstr, const char ch, const wchar_t /*wch*/, size_t pos)
+bool TokenStr::Compare(TokenStr *tokenstr, const char ch, const wchar_t /*wch*/, int64_t pos)
 {
 	if(tokenstr == NULL || tokenstr->len <= pos)
 		return false;

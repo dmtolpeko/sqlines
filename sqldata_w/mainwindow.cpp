@@ -1,12 +1,17 @@
+#if defined(WIN32) || defined(WIN64)
 #include <process.h>
+#else
+#include <unistd.h>
+#include <QtConcurrent>
+#endif
 #include <QMessageBox>
 #include <QDesktopWidget>
 #include <QAbstractItemView>
 #include <QFileDialog>
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "str.h"
-#include "os.h"
+#include "../sqlcommon/str.h"
+#include "../sqlcommon/os.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -253,7 +258,11 @@ void MainWindow::RunTransfer()
     SaveOptions();
 
     // Run transfer thread
+    #if defined(WIN32) || defined(WIN64)
     _beginthreadex(NULL, 0, &MainWindow::RunCommandThreadS, this, 0, NULL);
+    #else
+    QtConcurrent::run(&MainWindow::RunCommandThreadS, this);
+    #endif
 }
 
 // Run Validation command
@@ -315,7 +324,11 @@ void MainWindow::RunValidation()
     SaveOptions();
 
     // Run validation thread
+    #if defined(WIN32) || defined(WIN64)
     _beginthreadex(NULL, 0, &MainWindow::RunCommandThreadS, this, 0, NULL);
+    #else
+    QtConcurrent::run(&MainWindow::RunCommandThreadS, this);
+    #endif
 }
 
 // Build a command line string
@@ -803,8 +816,11 @@ int MainWindow::RunCommandThread()
 
     return rc;
 }
-
+#if defined(WIN32) || defined(WIN64)
 unsigned int __stdcall MainWindow::RunCommandThreadS(void *object)
+#else
+unsigned int MainWindow::RunCommandThreadS(void *object)
+#endif
 {
     MainWindow *mainWindow = (MainWindow*)object;
 
@@ -855,7 +871,7 @@ void MainWindow::UpdateTransferLog(SqlDataReply &reply)
 
         if(reply._int1 != 0)
         {
-            speed_rows = ((double)reply._t_int1)/((double)reply._int1)*1000.0;
+            speed_rows = int(((double)reply._t_int1)/((double)reply._int1)*1000.0);
             speed_bytes = ((double)reply._t_bigint1)/((double)reply._int1)*1000.0;
         }
 
@@ -1038,7 +1054,7 @@ void MainWindow::UpdateTransferLog(SqlDataReply &reply)
         if(reply._s_int1 != 0 && reply._s_int2 != 0)
             speed_rows = ((double)reply._s_int1)/((double)reply._s_int2) * 1000.0;
 
-        col.sprintf("%d (%.0lf rows/sec)", reply._s_int1, speed_rows);
+        col.sprintf("%ld (%.0lf rows/sec)", reply._s_int1, speed_rows);
         item->setText(col);
     }
 
@@ -1055,7 +1071,7 @@ void MainWindow::UpdateTransferLog(SqlDataReply &reply)
         if(reply._t_int1 != 0 && reply._t_int2 != 0)
             speed_rows = ((double)reply._t_int1)/((double)reply._t_int2) * 1000.0;
 
-        col.sprintf("%d (%.0lf rows/sec)", reply._t_int1, speed_rows);
+        col.sprintf("%ld (%.0lf rows/sec)", reply._t_int1, speed_rows);
         item->setText(col);
     }
 
@@ -1110,7 +1126,7 @@ void MainWindow::UpdateTransferLog(SqlDataReply &reply)
     // Set intermediate speed summary
     if(reply._cmd_subtype == SQLDATA_CMD_IN_PROGRESS || reply._cmd_subtype == SQLDATA_CMD_COMPLETE)
     {
-        int speed_rows = ((double)_rows_written)/((double)elapsed)*1000.0;
+        int speed_rows = int(((double)_rows_written)/((double)elapsed)*1000.0);
         double speed_bytes = ((double)_bytes_written)/((double)elapsed)*1000.0;
 
         char bytes_fmt[21], speed_bytes_fmt[21];
@@ -1542,8 +1558,10 @@ void MainWindow::ConsoleCallback(const char *format, va_list args)
 {
     char out[2048];
     QString outs;
-
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wformat-nonliteral"
     vsprintf(out, format, args);
+    #pragma clang diagnostic pop
     outs = out;
 
     _log_update_mutex.lock();
@@ -2210,28 +2228,28 @@ void MainWindow::SqlServerSWindowsAuthChecked(int state)
     }
 }
 
-QString MainWindow::EncodePassword(QString &password)
+QString MainWindow::EncodePassword(const QString &password)
 {
     QString encoded;
-    char ch;
+    int ch;
 
     for(int i = 0; i < password.size(); i++)
     {
-        ch = password.at(i).toAscii() ^ (i + 1);
+        ch = password.at(i).toLatin1() ^ (i + 1);
         encoded.append(ch);
     }
 
     return encoded;
 }
 
-QString MainWindow::DecodePassword(QString &encoded)
+QString MainWindow::DecodePassword(const QString &encoded)
 {
     QString password;
-    char ch;
+    int ch;
 
     for(int i = 0; i < encoded.size(); i++)
     {
-        ch = encoded.at(i).toAscii() ^ (i + 1);
+        ch = encoded.at(i).toLatin1() ^ (i + 1);
         password.append(ch);
     }
 
