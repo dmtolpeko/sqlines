@@ -24,6 +24,14 @@
 #ifdef WIN32
 #include <io.h>
 #include <direct.h>
+#elif __APPLE__
+#include <sys/stat.h>
+#include <sys/uio.h>
+#include <unistd.h>
+
+#define _read read
+#define _write write
+#define _close close
 #else
 #include <sys/stat.h>
 #include <sys/io.h>
