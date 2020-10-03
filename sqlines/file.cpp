@@ -1,4 +1,4 @@
-/** 
+/**
  * Copyright (c) 2016 SQLines
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,11 @@
 #include <direct.h>
 #else
 #include <sys/stat.h>
-#include <sys/io.h>
+#ifdef __APPLE__
+        #include <sys/uio.h>
+#else
+        #include <sys/io.h>
+#endif
 #include <unistd.h>
 
 #define _read read
@@ -51,7 +55,7 @@ bool File::IsDirectory(const char *path)
 #ifdef WIN32
 
 	struct _finddata_t fileInfo;
-	int findHandle = _findfirst(path, &fileInfo); 
+	int findHandle = _findfirst(path, &fileInfo);
 
 	// Check if a file or directory exists with this name
 	if(findHandle == -1)
@@ -88,7 +92,7 @@ bool File::IsFile(const char *path, size_t *size)
 #ifdef WIN32
 
 	struct _finddata_t fileInfo;
-	int findHandle = _findfirst(path, &fileInfo); 
+	int findHandle = _findfirst(path, &fileInfo);
 
 	// check if a file or directory exists with this name
 	if(findHandle == -1)
@@ -261,7 +265,7 @@ int File::GetFileSize(const char* file)
 	struct _finddata_t fileData;
 
 	// define the file size to allocate buffer
-	int findHandle = _findfirst(file, &fileData); 
+	int findHandle = _findfirst(file, &fileData);
 
 	if(findHandle == -1)
 	{
@@ -275,7 +279,7 @@ int File::GetFileSize(const char* file)
 #else
 
 	struct stat info;
-  
+
 	if(stat(file, &info) != -1)
 	{
 		// Check that the file was found
@@ -298,7 +302,7 @@ int File::GetContent(const char *file, void *input, size_t len)
 
 	// open the file
 #ifdef WIN32
-	fileHandle = _open(file, _O_RDONLY | _O_BINARY);	
+	fileHandle = _open(file, _O_RDONLY | _O_BINARY);
 #else
 	fileHandle = open(file, O_RDONLY);
 #endif
@@ -330,7 +334,7 @@ std::string File::GetRelativeName(const char* base, const char *file)
 	if(base == NULL || file == NULL)
 		return relative;
 
-	int i = 0; 
+	int i = 0;
 	int sep_pos = 0;
 
 	// Skip equal leading directories
@@ -370,9 +374,9 @@ int File::Write(const char *file, const char* content, size_t size)
    if(fileh == -1)
 	   return -1;
 
-   // write the content to the file 
+   // write the content to the file
    int rc = _write(fileh, content, size);
- 
+
    _close(fileh);
 
    return rc;
@@ -403,13 +407,13 @@ void File::CreateDirectories(const char *path)
 	{
 		std::string dir;
 
-		// Find the next directory separator 
+		// Find the next directory separator
 		while(path[i] && path[i] != DIR_SEPARATOR_CHAR)
 			i++;
 
 		bool found = (path[i] == DIR_SEPARATOR_CHAR) ? true : false;
-		
-		// path[i] points either to separator or end of string (in the last case, we also need to create 
+
+		// path[i] points either to separator or end of string (in the last case, we also need to create
 		// last directory
 		dir.assign(path, i);
 
@@ -422,14 +426,14 @@ void File::CreateDirectories(const char *path)
 		int rc = mkdir(dir.c_str(), S_IROTH | S_IWOTH | S_IXOTH);
 #endif
 
-		// Error 
+		// Error
 		if(rc == -1)
 		{
 			// Do not log "directory already exists" errors as it is normal
 			if(errno != EEXIST)
 			{
 				printf("\n\nCannot create directory %s - %s", path, strerror(errno));
-				return; 
+				return;
 			}
 		}
 	}

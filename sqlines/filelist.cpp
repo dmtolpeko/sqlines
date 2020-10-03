@@ -1,4 +1,4 @@
-/** 
+/**
  * Copyright (c) 2016 SQLines
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,11 @@
 #include <direct.h>
 #else
 #include <sys/stat.h>
-#include <sys/io.h>
+#ifdef __APPLE__
+        #include <sys/uio.h>
+#else
+        #include <sys/io.h>
+#endif
 #include <unistd.h>
 
 #define _read read
@@ -57,7 +61,7 @@ FileList::FileList()
 	wildcards are allowed for directories and file names
 		d:\prj*\a*\*.sql
 
-	last wildcard is only for files, use \ at the end to specify last wildcard for directories 
+	last wildcard is only for files, use \ at the end to specify last wildcard for directories
 
 	if path is not specified for an item, the path from the previous item is taken if it exists
 		d:\project\*.sql, *.ddl
@@ -111,7 +115,7 @@ int FileList::Load(const char *inputPath)
 		for(std::list<std::string>::iterator i = dirs.begin(); i != dirs.end(); i++)
 		{
 			// Find files in the specified directory matching the file wildcard
-			FindFiles(*i, file, dirs, _files); 
+			FindFiles(*i, file, dirs, _files);
 		}
 
 	}
@@ -163,7 +167,7 @@ int	FileList::FindFiles(std::string dir, std::string file, std::list<std::string
 
 	struct _finddata_t fileInfo;
 
-	int searchHandle = _findfirst(path.c_str(), &fileInfo); 
+	int searchHandle = _findfirst(path.c_str(), &fileInfo);
 	if(searchHandle == -1)
 		return 0;
 
@@ -190,7 +194,7 @@ int	FileList::FindFiles(std::string dir, std::string file, std::list<std::string
 			dirs.push_back(foundDir);
 		}
 
-	} while(_findnext(searchHandle, &fileInfo) == 0); 
+	} while(_findnext(searchHandle, &fileInfo) == 0);
 
 	_findclose(searchHandle);
 
@@ -210,7 +214,7 @@ int	FileList::FindFiles(std::string dir, std::string file, std::list<std::string
 	{
 		FILE *file = fopen(temp, "r");
 		char fileName[1024]; *fileName = '\x0';
-  
+
 		if(file)
 		{
 			// Read file content line by line
@@ -219,7 +223,7 @@ int	FileList::FindFiles(std::string dir, std::string file, std::list<std::string
 				// Remove new line from path, otherwise stat() will fail
 				int len = strlen(fileName);
 				if(len && fileName[len-1] == '\n')
-					fileName[len-1] = '\x0'; 
+					fileName[len-1] = '\x0';
 
 				size_t size = 0;
 				bool file = File::IsFile(fileName, &size);
@@ -231,7 +235,7 @@ int	FileList::FindFiles(std::string dir, std::string file, std::list<std::string
 				}
 			 }
 		}
-	 
+
 		fclose(file);
    }
 
