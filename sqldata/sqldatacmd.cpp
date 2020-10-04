@@ -1866,7 +1866,7 @@ void SqlDataCmd::PrintHowToUse()
 #if defined(WIN32) || defined(_WIN64)
 	printf("\n\n   sqldata.exe -sd=oracle,scott/tiger@orcl -td=sql,trusted@srv1,hr -t=cities");
 	printf("\n");
-	printf("\nRun sqldata_w.exe to launch a GUI version of SQLData.\n");
+	printf("\nRun sqldataw.exe to launch a GUI version of SQLData.\n");
 	printf("\nPress any key to continue...\n");
 	_getch();
 #else
