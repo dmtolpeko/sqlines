@@ -251,7 +251,7 @@ int Sqlines::ProcessFile(std::string &file, std::string &out_file, int *in_size,
 	if(in_lines != NULL)
 		*in_lines = lines;
 
-	delete input;
+	delete [] input;
 
 	return rc;
 }

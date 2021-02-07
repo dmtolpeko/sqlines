@@ -77,7 +77,7 @@ int CreateAssessmentReport(void *parser, const char *summary)
 // Free allocated result
 void FreeOutput(const char *output)
 {
-	delete output;
+	delete [] output;
 }
 
 #ifdef WIN32
