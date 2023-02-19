@@ -809,7 +809,8 @@ int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, 
 				// Informix returns '1200-01-01 11:11:00.0' for 11:11 (HOUR TO MINUTE)
 				SQL_TIMESTAMP_STRUCT *ts = (SQL_TIMESTAMP_STRUCT*)(s_cols[k]._data + offset);
 
-				long fraction = (long)ts->fraction;
+				// fraction must be positive
+				unsigned long fraction = (unsigned long)ts->fraction;
 
 				// Sybase ASA 9 stores 6-digit fraction multiplied by 1000, i.e. 123456 stored as 123456000
 				if(_source_api_type == SQLDATA_ASA && fraction % 1000 == 0)
