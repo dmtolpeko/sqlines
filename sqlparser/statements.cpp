@@ -10374,7 +10374,33 @@ bool SqlParser::ParseFunctionOptions()
 			exists = true;
 			continue;
 		}
-		
+		// WITH ( options ) in PostgreSQL
+		if(next->Compare("WITH", L"WITH", 4) == true)
+		{
+			if(_target == SQL_POSTGRESQL)
+			{
+				Token *open = GetNextCharToken('(', L'(');
+				if ( open )
+				{
+					Token *negate = GetNextWordToken("NOT", L"NOT", 3);
+					if ( negate ) {
+						Token *variant = GetNextWordToken("VARIANT", L"VARIANT", 7);
+						if ( variant )
+						{
+							Token::Remove(next, negate);
+							Token::Change(variant, "IMMUTABLE", L"IMMUTABLE", 9);
+						}
+					}
+					Token *close = GetNextCharToken(')', L')');
+					Token *semicolon = GetNextCharToken(';', L';');
+					Token::Remove(close, semicolon);
+				}
+			}
+
+			exists = true;
+			continue;
+		}
+
 		// Not a function option
 		PushBack(next);
 		break;
