@@ -71,7 +71,7 @@ Token::~Token()
 	}
 
 	// Delete target values
-	delete t_str;
+	delete [] t_str;
 	delete t_wstr;
 	t_str = NULL;
 	t_wstr = NULL;
