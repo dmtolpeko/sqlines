@@ -1,4 +1,4 @@
-/** 
+/**
  * Copyright (c) 2016 SQLines
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
 // File - File operations
 
 #include <stdio.h>
@@ -26,7 +26,12 @@
 #include <direct.h>
 #else
 #include <sys/stat.h>
-#include <sys/io.h>
+
+#ifdef __APPLE__
+        #include <sys/uio.h>
+#else
+        #include <sys/io.h>
+#endif
 #include <unistd.h>
 
 #define _read read
@@ -92,7 +97,7 @@ bool File::IsDirectory(const char *path)
 #if defined(WIN32) || defined(WIN64)
 
 	struct _finddata_t fileInfo;
-	intptr_t findHandle = _findfirst(path, &fileInfo); 
+	intptr_t findHandle = _findfirst(path, &fileInfo);
 
 	// Check if a file or directory exists with this name
 	if(findHandle == -1)
@@ -166,7 +171,7 @@ void File::FindDir(const char *dir_template, std::string &dir)
 #if defined(WIN32) || defined(WIN64)
 
 	struct _finddata_t fileInfo;
-	intptr_t findHandle = _findfirst(dir_template, &fileInfo); 
+	intptr_t findHandle = _findfirst(dir_template, &fileInfo);
 
 	// Check if a file or directory exists with this template
 	if(findHandle != -1)
@@ -258,7 +263,7 @@ int File::GetFileSize(const char* file)
 	struct _finddata_t fileData;
 
 	// define the file size to allocate buffer
-	int findHandle = _findfirst(file, &fileData); 
+	int findHandle = _findfirst(file, &fileData);
 
 	if(findHandle == -1)
 	{
@@ -272,7 +277,7 @@ int File::GetFileSize(const char* file)
 #else
 
 	struct stat info;
-  
+
 	if(stat(file, &info) != -1)
 	{
 		// Check that the file was found
@@ -295,9 +300,9 @@ int File::GetContent(const char *file, void *input, size_t len)
 
 	// open the file
 #if defined(WIN32) || defined(WIN64)
-	fileHandle = _open(file, _O_RDONLY | _O_BINARY);	
+	fileHandle = _open(file, _O_RDONLY | _O_BINARY);
 #else
-	fileHandle = open(file, O_RDONLY);    
+	fileHandle = open(file, O_RDONLY);
 #endif
 
 	if(fileHandle == -1)
@@ -364,13 +369,13 @@ void File::CreateDirectories(const char *path)
 	{
 		std::string dir;
 
-		// Find the next directory separator 
+		// Find the next directory separator
 		while(path[i] && path[i] != DIR_SEPARATOR_CHAR)
 			i++;
 
 		bool found = (path[i] == DIR_SEPARATOR_CHAR) ? true : false;
-		
-		// path[i] points either to separator or end of string (in the last case, we also need to create 
+
+		// path[i] points either to separator or end of string (in the last case, we also need to create
 		// last directory
 		dir.assign(path, i);
 
@@ -383,14 +388,14 @@ void File::CreateDirectories(const char *path)
 		int rc = mkdir(dir.c_str(), S_IROTH | S_IWOTH | S_IXOTH);
 #endif
 
-		// Error 
+		// Error
 		if(rc == -1)
 		{
 			// Do not log "directory already exists" errors as it is normal
 			if(errno != EEXIST)
 			{
 				printf("\n\nCannot create directory %s - %s", path, strerror(errno));
-				return; 
+				return;
 			}
 		}
 	}
@@ -414,9 +419,9 @@ int File::Write(const char *file, const char* content, size_t size)
    if(fileh == -1)
 	   return -1;
 
-   // write the content to the file 
+   // write the content to the file
    int rc = _write(fileh, content, size);
- 
+
    _close(fileh);
 
    return rc;
@@ -437,7 +442,7 @@ int File::Truncate(const char *file)
 
    if(fileh == -1)
 	   return -1;
- 
+
    return _close(fileh);
 }
 
@@ -458,6 +463,6 @@ int File::Append(const char *file, const char *data, unsigned int len)
 
    int rc = _write(fileh, data, len);
    _close(fileh);
- 
+
    return rc;
 }
