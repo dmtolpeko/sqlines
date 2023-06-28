@@ -237,6 +237,9 @@ private:
 	// Find MySQL installation paths
 	void FindMysqlPaths();
 
+	// Initialize global options that take effect only for new connections
+	int InitGlobalOptions();
+
 	// Initialize session by setting options
 	int InitSession();
 

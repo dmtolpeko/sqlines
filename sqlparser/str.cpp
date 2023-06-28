@@ -148,6 +148,24 @@ const char* Str::SkipUntil(const char *input, char ch)
 	return cur;
 }
 
+// Get substring until the specified char is met
+void Str::GetSubtringUntil(const char *input, char ch, int len, std::string &output)
+{
+	unsigned int pos = 0;
+
+	do
+	{
+		if(input[pos] == ch)
+		{
+			output.assign(input, pos);
+			break;
+		}
+
+		pos++;
+
+	} while(pos < len);
+}
+
 // Get copy of the input string
 char* Str::GetCopy(const char *input, size_t size)
 {
@@ -198,7 +216,7 @@ char* Str::IntToString(int int_value, char *output)
 
 	*output = '\x0';
 
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 	_itoa_s(int_value, output, 11, 10);
 #else
 	sprintf(output, "%d", int_value);
@@ -273,7 +291,7 @@ void Str::Dt2Ch(int dt, char *ch)
 }
 
 // _strupr() and _strlwr() functions are not available on Linux
-#ifndef WIN32
+#if !defined(WIN32) && !defined(WIN64)
 
 char *_strupr(char *input)
 {

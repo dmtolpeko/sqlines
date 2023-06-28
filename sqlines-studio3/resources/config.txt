@@ -1,0 +1,40 @@
+SOURCES:
+Greenplum:greenplum
+Hive:hive
+IBM DB2:DB2
+Informix:informix
+Impala:impala
+MariaDB:mariadb
+Microsoft SQL Server:sql
+MySQL:mysql
+Netezza:netezza
+Oracle:oracle
+Snowflake:snowflake
+Spark SQL:spark
+Sybase ASE:sybase
+Sybase SQL Anywhere:asa
+Sybase Advantage:abs
+PostgreSQL:postgresql
+Presto:presto
+Redshift:redshift
+Teradata:teradata
+Vertica:vertica
+
+TARGETS:
+Microsoft SQL Server:sql
+Oracle:oracle
+IBM DB2:DB2
+Hive:hive
+MySQL:mysql
+MariaDB:mariadb
+PostgreSQL:postgresql
+Presto:presto
+Redshift:redshift
+Snowflake:snowflake
+Spark SQL:spark
+Sybase:sybase
+Informix:informix
+Teradata:teradata
+Greenplum:greenplum
+Netezza:netezza
+Vertica:vertica

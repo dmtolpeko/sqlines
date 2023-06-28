@@ -14,6 +14,8 @@ int main(int argc, char** argv)
 
 	try
 	{
+		cmd.SetLicense(argv[0]);
+
 		rc = cmd.DefineOptions(argc, argv);
 
 		// Run SQLData in command line

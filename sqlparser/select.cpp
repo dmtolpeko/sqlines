@@ -29,10 +29,21 @@ bool SqlParser::ParseSelectStatement(Token *select, int block_scope, int select_
 	if(select == NULL)
 		return false;
 
+	Token *select_open = NULL;
+
+	// Any SELECT can be optionally enclosed with () and in this case select points to open
+	if(TOKEN_CMPC(select, '('))
+	{
+		select_open = select;
+		select = GetNextSelectStartKeyword();
+	}
+
+	STATS_DECL
+
 	Token *from = NULL;
 	Token *from_end = NULL;
 
-	ListW from_table_end;
+	ListWM from_table_end;
 
 	Token *where_ = NULL;
 	Token *where_end = NULL;
@@ -67,6 +78,12 @@ bool SqlParser::ParseSelectStatement(Token *select, int block_scope, int select_
 			GetNextWordToken("SELECT", L"SELECT", 6);
 	}
 
+	ListW out_cols_internal;
+
+	// Fill list of columns for further use even if it is not requested by caller
+	if(out_cols == NULL)
+		out_cols = &out_cols_internal;
+
 	ParseSelectList(select, select_scope, &into, &dummy_not_required, &agg_func, &agg_list_func, 
 		exp_starts, out_cols, into_cols, &rowlimit_slist, &rowlimit_percent);
 
@@ -78,8 +95,14 @@ bool SqlParser::ParseSelectStatement(Token *select, int block_scope, int select_
 	// FROM
 	ParseSelectFromClause(select, false, &from, &from_end, &app_subq_aliases, dummy_not_required, &from_table_end);
 
+	// Resolve data types for columns in select list
+	SelectSetOutColsDataTypes(out_cols, &from_table_end);
+
 	// WHERE
 	ParseWhereClause(SQL_STMT_SELECT, &where_, &where_end, &rowlimit);
+
+	if(_source == SQL_ORACLE)
+		ParseConnectBy();
 
 	// GROUP BY
 	ParseSelectGroupBy();
@@ -89,6 +112,13 @@ bool SqlParser::ParseSelectStatement(Token *select, int block_scope, int select_
 
     // QUALIFY clause in Teradata
     ParseSelectQualify(select, select_list_end);
+
+	Token *select_close = NULL;
+
+	// Check for closing (SELECT ...) before checking for set (UNION i.e.)
+	// Standalone (SELECT ... ) UNION (SELECT ...) is allowed but (SELECT ... UNION SELECT ...) not (standalone, not subquery)
+	if(select_open != NULL)
+		select_close = TOKEN_GETNEXT(')');
 
 	// UNION ALL i.e. must go before ORDER BY and options that belong to the entire SELECT
 	ParseSelectSetOperator(block_scope, select_scope);
@@ -161,6 +191,11 @@ bool SqlParser::ParseSelectStatement(Token *select, int block_scope, int select_
 	if(_target == SQL_ORACLE && into == true && agg_func == false)
 		OracleContinueHandlerForSelectInto(select);
 
+	// Sybase ADS nested UDF call without variable assinment SELECT udf(params) FROM System.iota (standalone SELECT)
+	if(_source == SQL_SYBASE_ADS && _spl_scope == SQL_SCOPE_FUNC && select_scope == 0 && !into &&
+		from != NULL && from->IsRemoved() && out_cols != NULL && out_cols->GetCount() == 1)
+		SybaseAdsSelectNestedUdfCall(select, out_cols);
+
 	// Add statement delimiter if not set when source is SQL Server
 	if(select_scope == 0)
 	{
@@ -169,6 +204,15 @@ bool SqlParser::ParseSelectStatement(Token *select, int block_scope, int select_
 		// If there are no non-declare statements above, set last declare
 		if(_spl_first_non_declare == NULL)
 			_spl_first_non_declare = select;
+	}
+
+	if(select_open != NULL && select_close == NULL)
+		select_close = TOKEN_GETNEXT(')');
+
+	if(select_scope == 0)
+	{
+		STATS_SET_DESC(SQL_STMT_SELECT_DESC)
+		STMS_STATS(select);
 	}
 
 	Leave(SQL_SCOPE_SELECT_STMT);
@@ -230,10 +274,10 @@ bool SqlParser::ParseSubSelect(Token *open, int select_scope)
 // Returns SELECT or WITH if it is the next input token
 Token* SqlParser::GetNextSelectStartKeyword()
 {
-	Token *select = GetNext("SELECT", L"SELECT", 6);
+	// Any SELECT can be optionally enclosed with ()
+	Token *open = TOKEN_GETNEXT('(');
 
-	if(select != NULL)
-		return select;
+	Token *select = GetNext("SELECT", L"SELECT", 6);
 
 	Token *sel = NULL;
 
@@ -247,12 +291,28 @@ Token* SqlParser::GetNextSelectStartKeyword()
 			// Use SELECT in other databases
 			if(_target != SQL_TERADATA)
 				Token::Change(sel, "SELECT", L"SELECT", 6);
-
-			return sel;
 		}
 	}
 
-	return GetNext("WITH", L"WITH", 4);
+	Token *with = NULL;
+
+	if(select == NULL && sel == NULL)
+		with = GetNext("WITH", L"WITH", 4);
+
+	Token *select_keyword = Nvl(select, sel, with);
+
+	if(open != NULL)
+	{
+		if(select_keyword != NULL)
+		{
+			PushBack(select_keyword);
+			return open;
+		}
+		else
+			PushBack(open);
+	}
+
+	return select_keyword;
 }
 
 // Common table expression
@@ -346,6 +406,12 @@ bool SqlParser::ParseSelectList(Token *select, int select_scope, bool *select_in
 			exp_starts->Add(first);
 
 		ParseExpression(first);
+
+		Token *first_end = GetLastToken();
+
+		// Standalone column name 
+		if(first == first_end && first->type == TOKEN_IDENT)
+			first->subtype = TOKEN_SUB_COLUMN_NAME;
 
 		// Check for an aggregate function
 		if(IsAggregateFunction(first) == true)
@@ -465,8 +531,19 @@ bool SqlParser::ParseSelectList(Token *select, int select_scope, bool *select_in
 
 	Token *into = GetNextWordToken("INTO", L"INTO", 4);
 
+	bool into_temp_table = false;
+
+	// SELECT ... INTO temp_table WHERE ... syntax in SQL Server, Sybase ASE, Sybase ADS
+	if(into != NULL && Source(SQL_SQL_SERVER, SQL_SYBASE, SQL_SYBASE_ADS))
+	{
+		Token *name = GetNextToken();
+
+		if(Token::Compare(name, "#", L"#", 0, 1))
+			into_temp_table = true;
+	}
+
 	// Parse into clause
-	if(into != NULL)
+	if(into != NULL && !into_temp_table)
 	{
 		ListwItem *cur_select = cols.GetFirst();
 
@@ -729,7 +806,7 @@ bool SqlParser::ParseSelectListPredicate(Token **rowlimit_slist, bool *rowlimit_
 
 // FROM clause
 bool SqlParser::ParseSelectFromClause(Token *select, bool nested_from, Token **from_out, Token **from_end, 
-									int *appended_subquery_aliases, bool dummy_not_required, ListW *from_table_end)
+									int *appended_subquery_aliases, bool dummy_not_required, ListWM *from_table_end)
 {
 	Token *from = NULL;
 
@@ -830,6 +907,15 @@ bool SqlParser::ParseSelectFromClause(Token *select, bool nested_from, Token **f
 
 					dummy_exists = true;
 				}
+				else
+				// Sybase ADS System.iota
+				if(TOKEN_CMP(first, "SYSTEM.IOTA"))
+				{
+					if(_target == SQL_ORACLE)
+						Token::Change(first, "dual", L"dual", 4);
+
+					dummy_exists = true;
+				}
 			}
 		}
 
@@ -873,6 +959,10 @@ bool SqlParser::ParseSelectFromClause(Token *select, bool nested_from, Token **f
 
 			count++;
 
+			// Table name without alias
+			if(from_table_end != NULL)
+				from_table_end->Add(first, first);
+
 			PushBack(second);
 			break;
 		}
@@ -910,7 +1000,7 @@ bool SqlParser::ParseSelectFromClause(Token *select, bool nested_from, Token **f
 }
 
 // Join clause in FROM clause of SELECT statement 
-bool SqlParser::ParseJoinClause(Token * /*first*/, Token *second, bool first_is_subquery, ListW *from_table_end)
+bool SqlParser::ParseJoinClause(Token *first, Token *second, bool first_is_subquery, ListWM *from_table_end)
 {
 	if(second == NULL)
 		return false;
@@ -928,7 +1018,7 @@ bool SqlParser::ParseJoinClause(Token * /*first*/, Token *second, bool first_is_
 	if(exists == false)
 	{
 		if(!first_is_subquery && from_table_end != NULL)
-			from_table_end->Add(second);
+			from_table_end->Add(second, first);
 
 		Token *token = GetNext();
 
@@ -1088,6 +1178,58 @@ bool SqlParser::ParseWhereCurrentOfCursor(int stmt_scope)
 		_spl_updatable_current_of_cursors.Add(cursor);
 
 	return true;
+}
+
+// CONNECT BY in Oracle
+bool SqlParser::ParseConnectBy()
+{
+	bool exists = false;
+
+	// CONNECT BY and START WITH can go in any order
+	while(true)
+	{
+		Token *next = GetNextToken();
+
+		if(next == NULL)
+			break;
+
+		// CONNECT BY
+		if(TOKEN_CMP(next, "CONNECT"))
+		{
+			Token *by = TOKEN_GETNEXTW("BY");
+
+			// [PRIOR] condition [AND [PRIOR] condition ...] clauses
+			if(by != NULL)
+			{
+				// Optional PIOR
+				/*Token *prior */ TOKEN_GETNEXTW("PRIOR");
+				ParseBooleanExpression(SQL_BOOL_CONNECT_BY);
+				exists = true;
+			}
+
+			continue;
+		}
+		else
+		// START WITH
+		if(TOKEN_CMP(next, "START"))
+		{
+			Token *with = TOKEN_GETNEXTW("WITH");
+
+			// condition [AND condition ...] clauses
+			if(with != NULL)
+			{
+				ParseBooleanExpression(SQL_BOOL_START_WITH);
+				exists = true;
+			}
+
+			continue;
+		}
+
+		PushBack(next);
+		break;
+	}
+
+	return exists;
 }
 
 // GROUP BY clause in SELECT statement
@@ -1333,6 +1475,12 @@ bool SqlParser::ParseSelectOptions(Token * /*select*/, Token * /*from_end*/, Tok
 				if(skip != NULL)
 					locked = GetNextWordToken("LOCKED", L"LOCKED", 6);
 
+				Token *nowait = NULL;
+
+				// Oracle NOWAIT
+				if(skip == NULL)
+					nowait = TOKEN_GETNEXTW("NOWAIT");
+
 				// MySQL does not support SKIP LOCKED, comment it
 				if(Target(SQL_MARIADB, SQL_MYSQL) && skip != NULL && locked != NULL)
 					Comment(skip, locked);
@@ -1521,6 +1669,54 @@ bool SqlParser::ParseValuesStatement(Token *values, int *result_sets)
 	}
 
 	return true;
+}
+
+// Resolve data types for columns in select list
+void SqlParser::SelectSetOutColsDataTypes(ListW *out_cols, ListWM *from_table_end)
+{
+	if(out_cols == NULL || from_table_end == NULL)
+		return;
+
+	ListwItem *col_item = out_cols->GetFirst();
+
+	while(col_item != NULL)
+	{
+		Token *col = (Token*)col_item->value;
+
+		if(col == NULL)
+			break;
+
+		// Standalone column name
+		if(col->subtype == TOKEN_SUB_COLUMN_NAME)
+		{
+			ListwmItem *from_item = from_table_end->GetFirst();
+
+			// Find a table containing this column, and define its data type
+			while(from_item != NULL)
+			{
+				Token *table = (Token*)from_item->value2;
+
+				col->datatype_meta = GetMetaType(table, col);
+
+				if(col->datatype_meta != NULL)
+				{
+					col->table = table;
+					break;
+				}
+
+				from_item = from_item->next;
+			}
+		}
+		else
+		// All columns selected from single table
+		if(TOKEN_CMPC(col, '*') && from_table_end->GetCount() == 1)
+		{
+			// Save the table name
+			col->table = (Token*)from_table_end->GetFirst()->value2;
+		}
+
+		col_item = col_item->next;
+	}
 }
 
 // Convert row limits specified in SELECT

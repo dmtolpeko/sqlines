@@ -271,6 +271,42 @@ void SqlApiBase::SplitConnectionString(const char *conn, std::string &user, std:
 	}
 }
 
+void SqlApiBase::SplitConnectionString(const char *conn, std::string &user, std::string &pwd, std::string &server, std::string &db, std::string &port)
+{
+	if(conn == NULL)
+		return;
+
+	std::string db_full;
+
+	SplitConnectionString(conn, user, pwd, db_full);
+
+	const char *start = db_full.c_str();
+
+	// Find : and , that denote the server port and the database name
+	const char *semi = strchr(start, ':');
+	const char *comma = strchr(start, ',');
+
+	const char *end = (semi != NULL) ? semi :comma;
+
+	// Define server name
+	if(end != NULL)
+		server.assign(start, (size_t)(end - start));
+	else
+		server = start;
+
+	// Define port
+	if(semi != NULL)
+	{
+		if(comma != NULL && comma > semi)
+			port.assign(semi + 1, (size_t)(comma - semi - 1));
+		else
+			port = semi + 1;
+	}
+
+	if(comma != NULL)
+		db = Str::SkipSpaces(comma + 1);
+}
+
 // Build a condition to select objects from the catalog and exclude from selection
 void SqlApiBase::GetSelectionCriteria(const char *select, const char *exclude, const char *schema, 
 					const char *object, std::string &output, const char *default_schema, bool upper_case)

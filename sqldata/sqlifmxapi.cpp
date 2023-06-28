@@ -68,13 +68,13 @@ int SqlIfmxApi::Init()
 		}		
 	}
 #endif
-	
-	// Save the full path of the loaded driver
-	Os::GetModuleFileName(_dll, _loaded_driver, 1024);
 
 	// Get functions
 	if(_dll != NULL)
 	{
+		// Save the full path of the loaded driver
+		Os::GetModuleFileName(_dll, _loaded_driver, 1024);
+
 		_SQLAllocHandle = (SQLAllocHandleFunc)Os::GetProcAddress(_dll, "SQLAllocHandle");
 		_SQLBindCol = (SQLBindColFunc)Os::GetProcAddress(_dll, "SQLBindCol");
 		_SQLDescribeCol = (SQLDescribeColFunc)Os::GetProcAddress(_dll, "SQLDescribeCol");
@@ -1371,7 +1371,7 @@ int SqlIfmxApi::ReadCheckConstraints(std::string & /*condition*/)
 {
 	// Read all CHECK constraints, filter will be applied by constrid
 	std::string query = "SELECT constrid, seqno, checktext";
-	query += " FROM syschecks WHERE type = 'T'";
+	query += " FROM syschecks WHERE type = 'T'"; 
 	query += " ORDER BY constrid, seqno"; 
 	
 	size_t col_count = 0;
@@ -1384,13 +1384,13 @@ int SqlIfmxApi::ReadCheckConstraints(std::string & /*condition*/)
 	// Open cursor allocating 100 rows buffer
 	int rc = OpenCursor(query.c_str(), 100, 0, &col_count, &allocated_rows, &rows_fetched, &cols, &time_read, true);
 
+	int prev_cnsid = -1;
+
+	// Text can span multiple rows
+	std::string checktext;
+
 	while(rc >= 0)
 	{		
-		// Text can span multiple rows
-		std::string checktext;
-
-		int prev_cnsid = -1;
-
 		for(int i = 0; i < rows_fetched; i++)
 		{
 			int cnsid = -1;

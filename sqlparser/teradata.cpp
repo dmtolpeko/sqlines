@@ -219,6 +219,7 @@ bool SqlParser::ParseCollectStatement(Token *collect)
     Token *on = TOKEN_GETNEXTW("ON");
     /*Token *name */ (void) GetNextIdentToken();
 
+	STATS_DECL
     STMS_STATS(collect);
 
 	// Convert to UPDATE STATISTICS and comment because options are different for EsgynDB

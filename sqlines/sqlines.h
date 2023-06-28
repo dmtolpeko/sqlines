@@ -20,18 +20,23 @@
 #include <string>
 #include "applog.h"
 #include "parameters.h"
+#include "license.h"
 
-#define SQLINES_VERSION             "SQLines 3.1.1 - SQL Conversion Tool."
-#define SQLINES_COPYRIGHT           "Copyright (c) 2017 SQLines. All Rights Reserved."
+#define SQLINES_VERSION             "SQLines 3.1.330 - SQL Assessment and Conversion Tool."
+#define SQLINES_COPYRIGHT           "Copyright (c) 2020 SQLines. All Rights Reserved."
 
 #define S_OPTION                    "-s"        // Source type 
 #define T_OPTION                    "-t"        // Target type
 #define IN_OPTION                   "-in"       // Input files/directory
 #define STDIN_OPTION                "-stdin"    // Read input from STDIN and output to STDOUT
 #define OUT_OPTION                  "-out"      // Output files/directory
-#define A_OPTION                    "-a"        // Assessment    
-#define PL_OPTION                   "-pl"       // Target programming language (native, Java i.e.)
+#define A_OPTION                    "-a"        // Assessment 
+#define SL_OPTION                   "-sl"       // Source programming language (COBOL i.e.)
+#define TL_OPTION                   "-tl"       // Target programming language (Java i.e.)
 #define LOG_OPTION                  "-log"      // Log file
+
+#define SQLINES_CURRENT_FILE        "__cur_file__"    // Relative path for the current file
+#define SQLINES_EVAL_MODE           "__eval_mode__"   // Evaluation mode
 
 // Default log file name
 #define SQLINES_LOGFILE             "sqlines.log"
@@ -45,8 +50,7 @@ class Sqlines
     std::string _t;
     std::string _in;
     std::string _out;
-    std::string _pl;
-    std::string _logfile;
+	std::string _logfile;
 
     bool _a;
     bool _stdin;
@@ -64,6 +68,9 @@ class Sqlines
     Parameters _parameters;
     // Logger
     AppLog _log;
+
+	// License information
+	License _license;
 
 public:
     Sqlines();

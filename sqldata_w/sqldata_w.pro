@@ -30,7 +30,8 @@ SOURCES += main.cpp\
     ..\\sqldata\\sqlstdapi.cpp \
     ..\\sqldata\\sqldatacmd.cpp \
     ..\\sqldata\\applog.cpp \
-    ..\\sqldata\\parameters.cpp
+    ..\\sqldata\\parameters.cpp \
+    ..\\sqldata\\license.cpp
 
 HEADERS  += mainwindow.h \
 	tablewidget.h \
@@ -53,7 +54,8 @@ HEADERS  += mainwindow.h \
     ..\\sqldata\\sqldatacmd.h \
     ..\\sqldata\\applog.h \
     ..\\sqldata\\parameters.h \
-    ..\\sqldata\\sqlparserexp.h
+    ..\\sqldata\\sqlparserexp.h \
+    ..\\sqldata\\license.h
 
 FORMS    += mainwindow.ui
 

@@ -72,7 +72,9 @@ struct SqlCol
 
 	// Column contains binary data (MySQL)
 	bool _binary;
-
+	// Data fetched in UTF-16
+	bool _nchar;
+	
     // Column data type name
     std::string _datatype_name;
     std::string _t_datatype_name;
@@ -106,7 +108,7 @@ struct SqlCol
 	SqlCol() 
 	{ 
 		*_name = '\x0'; *_t_name = '\x0';
-		_len = 0; _fetch_len = 0; _precision = 0; _scale = 0; _binary = false; 
+		_len = 0; _fetch_len = 0; _precision = 0; _scale = 0; _binary = false; _nchar = false;
 		_native_dt = 0; _native_fetch_dt = 0; 
 		_data = NULL; _ind2 = NULL; /*ind4 = NULL;*/ ind = NULL; _len_ind2 = NULL; _len_ind4 = NULL;
 		_nullable = true; _lob = false; _lob_fetch_status = 0;
@@ -642,6 +644,7 @@ public:
 
 	// Split connection string to user, password and database
 	void SplitConnectionString(const char *conn, std::string &user, std::string &pwd, std::string &db);
+	void SplitConnectionString(const char *conn, std::string &user, std::string &pwd, std::string &server, std::string &db, std::string &port);
 
 	// Build a condition to select objects from the catalog
 	static void GetSelectionCriteria(const char *select, const char *exclude, const char *schema, const char *object, std::string &output, const char *default_schema, bool upper_case);

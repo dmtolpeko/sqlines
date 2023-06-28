@@ -34,7 +34,7 @@
 #include "applog.h"
 
 #define SQLDATA_NAME  		        "SQLines Data"	
-#define SQLDATA_VERSION_NUMBER		"3.1.317"	
+#define SQLDATA_VERSION_NUMBER		"3.3.31"	
 
 #if defined(_WIN64)
 #define SQLDATA_VERSION				SQLDATA_NAME ## " " ## SQLDATA_VERSION_NUMBER ##" x64"	
@@ -47,7 +47,7 @@
 #endif
 
 #define SQLDATA_DESC				"Database Migration Tool"
-#define SQLDATA_COPYRIGHT			"Copyright (c) 2017 SQLines. All Rights Reserved."
+#define SQLDATA_COPYRIGHT			"Copyright (c) 2020 SQLines. All Rights Reserved."
 
 #define SQLDATA_DEFAULT_SESSIONS	4
 
@@ -72,6 +72,13 @@ struct SqlMetaTask
 	std::string statement;
 
 	SqlMetaTask() {	type = 0; }
+};
+
+struct SqlObjMetaTask
+{
+	SqlObjMeta *source;
+
+	SqlObjMetaTask() {	source = NULL; }
 };
 
 class SqlData
@@ -99,6 +106,7 @@ class SqlData
 	std::map<std::string, std::string> *_queries;
 	// Metadata transfer queue
 	std::list<SqlMetaTask> _meta_tasks;
+	std::list<SqlObjMetaTask> _obj_meta_tasks;
 
 	// Tables that are being processed now (data transfer)
 	std::list<std::string> _tables_in_progress;
@@ -119,9 +127,11 @@ class SqlData
 	std::map<std::string, std::string> _schema_map;
 	std::string _schema_map_str;
 
-	// Column name and data type mapping
+	// Table, column name, data type and constraint mapping
+	std::map<std::string, std::string> _table_map;
 	std::list<SqlColMap> _column_map;
     std::list<SqlDataTypeMap> _datatype_map;
+	std::map<std::string, std::string> _cns_map;
 
 	// Table select expressions and WHERE conditions
 	std::map<std::string, std::string> _tsel_exp_map;
@@ -208,12 +218,19 @@ public:
 	int CreateMetadataQueues(std::string &select, std::string &exclude);
 	void CreateMetadataTaskForColumnDefault(SqlColMeta &col);
 
+	// Create tasks queue to transfer non-table objects
+	int CreateObjectQueue(std::string &select, std::string &exclude, int *total_obj, int *total_lines, int *total_bytes);
+
 	// Set schema name mapping
 	void SetSchemaMapping(std::string &map) { _schema_map_str = map; }
 	void SetSchemaMapping();
 
+	// Set table name mapping
+	void SetTableMappingFromFile(std::string &file);
 	// Set column name mapping
 	void SetColumnMappingFromFile(std::string &file);
+	// Set constraint name mapping
+	void SetConstraintMappingFromFile(std::string &file);
     // Set global data type mapping
     void SetDataTypeMappingFromFile(std::string &file);
 	// Set table select expressions from file
@@ -309,12 +326,14 @@ private:
 	bool IsDdlRunning(std::string &table);
 	// For trigger task, check that all sequences already created
 	bool IsSequencesCreated();
+	// Check if identity column defined for the table
+	bool IsIdentityDefined(std::string &schema, std::string &table);
 
 	// Get the target name
 	void MapObjectName(std::string &source, std::string &target);
-	void MapObjectName(std::string &s_schema, std::string &s_table, std::string &t_name);
+	void MapObjectName(std::string &s_schema, std::string &s_table, std::string &t_name, bool tmap = true);
 	void MapObjectName(std::string &s_schema, std::string &s_table, std::string &t_schema, std::string &t_table);
-	void MapConstraintName(const char *source, std::string &target, char type, const char* p_table);
+	void MapConstraintName(const char *source, std::string &target, char type, std::string &table, std::string &p_table);
     void MapColumn(const char *s_table, std::string &s_name, std::string &t_name, std::string &t_type);
 
 	// Convert identifier between databases 
@@ -327,9 +346,9 @@ private:
 	const char* GetForeignKeyAction(char action);
 
 	// Get primary or unique key columns
-	void GetKeyConstraintColumns(SqlConstraints &cns, std::string &output);
+	void GetKeyConstraintColumns(SqlMetaTask &task, SqlConstraints &cns, std::string &output);
 	// Get foreign key columns
-	void GetForeignKeyConstraintColumns(SqlConstraints &cns, std::string &fcols, std::string &pcols, std::string &ptable);
+	void GetForeignKeyConstraintColumns(SqlMetaTask &task, SqlConstraints &cns, std::string &fcols, std::string &pcols, std::string &ptable);
     // Get index columns
 	void GetIndexColumns(SqlIndexes &idx, std::string &output);
 };

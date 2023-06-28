@@ -200,6 +200,9 @@ bool SqlParser::ParseStorageClause(Token *table_name, Token **id_start, Token **
 	if(_source == SQL_TERADATA && ParseTeradataStorageClause(last_colname, last_colend) == true)
 		return true;
 
+	if(_source == SQL_SYBASE_ADS && ParseSybaseAdsStorageClause() == true)
+		return true;
+
 	return false;
 }
 
@@ -430,8 +433,8 @@ bool SqlParser::ParseOracleStorageClause()
 		if(next == NULL)
 			break;
 
-		// SEGMENT CREATION IMMEDIATE | DEFERRED
-		if(next->Compare("SEGMENT", L"SEGMENT", 7) == true)
+		// SEGMENT CREATION IMMEDIATE | DEFERRED (or undocumented DB CREATION IMMEDIATE found in one customer)
+		if(next->Compare("SEGMENT", L"SEGMENT", 7) == true || TOKEN_CMP(next, "DB"))
 		{
 			Token *creation = GetNextWordToken("CREATION", L"CREATION", 8);
 			Token *value = GetNextToken();
@@ -872,6 +875,18 @@ bool SqlParser::ParseDb2StorageClause()
 				continue;
 			}
 		}
+		else
+		// ORGANIZE BY COLUMN | ROW
+		if(TOKEN_CMP(next, "ORGANIZE"))
+		{
+			Token *by = TOKEN_GETNEXTW("BY");
+
+			Token *column = TOKEN_GETNEXTWP(by, "COLUMN");
+			/*Token *row */ (column == NULL) ? TOKEN_GETNEXTWP(by, "ROW") : NULL;
+
+			exists = true;
+			continue;
+		}
 
 		// Not a DB2 storage clause
 		PushBack(next);
@@ -1010,6 +1025,38 @@ bool SqlParser::ParseTeradataStorageClause(Token *last_colname, Token *last_cole
             // WITH DATA is default in EsgynDB
             if(no == NULL && data != NULL && Target(SQL_ESGYNDB))
                 Token::Remove(next, data);
+
+			exists = true;
+			continue;
+		}
+
+		// Not a storage clause
+		PushBack(next);
+		break;
+	}
+
+	return exists;
+}
+
+// Parse Sybase ADS CREATE TABLE storage clause
+bool SqlParser::ParseSybaseAdsStorageClause()
+{
+	bool exists = false;
+
+	while(true)
+	{
+		Token *next = GetNextToken();
+
+		if(next == NULL)
+			break;
+
+		// IN DATABASE
+		if(TOKEN_CMP(next, "IN"))
+		{
+			Token *database = TOKEN_GETNEXTW("DATABASE");
+
+			if(_target != SQL_SYBASE_ADS)
+				Token::Remove(next, database);
 
 			exists = true;
 			continue;

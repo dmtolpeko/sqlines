@@ -47,6 +47,8 @@ int Sqlines::Run(int argc, char** argv)
 {
 	_total_files = 0;
 
+	_license.Set(argv[0]);
+
 	// Read and validate parameters
 	int rc = SetParameters(argc, argv);
 
@@ -99,6 +101,8 @@ int Sqlines::ProcessFiles()
 		int in_size = 0;
 		int in_lines = 0;
 
+		SetParserOption(_parser, SQLINES_CURRENT_FILE, relative_name.c_str());
+
 		// Convert the current file
 	    rc = ProcessFile(current, out_name, &in_size, &in_lines);
 
@@ -128,8 +132,12 @@ int Sqlines::ProcessFiles()
 
         if(_a)
         {
+			std::string report_summary = SQLINES_VERSION;
+			report_summary += "<br><br>"; 
+			report_summary += summary;
+
             _log.Log("\n\nCreating assessment report");
-            CreateAssessmentReport(_parser, summary);
+			CreateAssessmentReport(_parser, report_summary.c_str());
         }
     }
 
@@ -308,7 +316,21 @@ int Sqlines::SetParameters(int argc, char **argv)
 	_log.SetLogfile(_logfile.c_str());
 
 	if(_stdin == false)
+	{
 		_log.Log("\n%s\n%s", SQLINES_VERSION, SQLINES_COPYRIGHT);
+
+		// Show the license message if required
+		if(_license.IsLicenseCheckRequired())
+		{
+			if(_license.IsEmpty())
+			{
+				_log.Log("\n\nThe product is FOR EVALUATION USE ONLY.");
+				SetParserOption(_parser, SQLINES_EVAL_MODE, "TRUE");
+			}
+			else
+				_log.Log("\n\nThe product is licensed to %s.", _license.GetName().c_str());
+		}
+	}
 
 	// Get -s option
 	value = _parameters.Get(S_OPTION);
@@ -432,9 +454,21 @@ short Sqlines::DefineType(const char *name)
 	if(_stricmp(name, "mariadb") == 0)
 		type = SQL_MARIADB;
     else
+	if(_stricmp(name, "mariadb_ora") == 0)
+		type = SQL_MARIADB_ORA;
+    else
+	if(_stricmp(name, "hive") == 0)
+		type = SQL_HIVE;
+    else
+	if(_stricmp(name, "redshift") == 0)
+		type = SQL_REDSHIFT;
+    else
 	if(_stricmp(name, "esgyndb") == 0 || _stricmp(name, "trafodion") == 0)
 		type = SQL_ESGYNDB;
-
+	else
+	if(_stricmp(name, "ads") == 0)
+		type = SQL_SYBASE_ADS;
+	
 	return type;
 }
 

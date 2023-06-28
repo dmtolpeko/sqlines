@@ -39,6 +39,8 @@
 
 #define SQLSRV_ODBC_DLL			"odbc32.dll"
 
+#define SQLSERV_DLL             "libsqlncli.so"
+
 #define SQLSRV_DLL_LOAD_ERROR	"Loading SQL Server library:"
 
 // ODBC API Functions
@@ -74,10 +76,11 @@ class SqlSncApi : public SqlApiBase
 	SQLHANDLE _hstmt_cursor;
 
 	// Connection information
-	char _user[256];
-	char _pwd[256];
-	char _server[256];
-	char _db[256];
+	std::string _user;
+	std::string _pwd;
+	std::string _server;
+	std::string _port;
+	std::string _db;
 	bool _trusted;
 
 	std::string _driver;
@@ -91,6 +94,9 @@ class SqlSncApi : public SqlApiBase
 	SqlCol *_bcp_cols;
 	// Exist LOB columns to be sent using bcp_moretext
 	bool _bcp_lob_exists;
+
+	// Codepage to use for BCP
+	int _bcp_codepage;
 
 	// SQL Server Native Client DDL (for Bulk Copy API)
 #if defined(WIN32) || defined(_WIN64)

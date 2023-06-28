@@ -162,7 +162,7 @@ void SqlParser::MySQLAddNotFoundHandler()
 void SqlParser::MySQLInitNotFoundBeforeOpen()
 {
 	int k  = 0;
-	for(ListwItem *i = _spl_open_cursors.GetFirst(); i != NULL; i = i->next)
+	for(ListwmItem *i = _spl_open_cursors.GetFirst(); i != NULL; i = i->next)
 	{
 		Token *open = (Token*)i->value;
 
@@ -174,10 +174,10 @@ void SqlParser::MySQLInitNotFoundBeforeOpen()
 }	
 
 // MySQL, MariaDB require cursor declaration go before any other statements
-void SqlParser::MySQLMoveCursorDeclarations(Token *declare, Token *cursor_end)
+bool SqlParser::MySQLMoveCursorDeclarations(Token *declare, Token *cursor_end)
 {
 	if(_spl_first_non_declare == NULL || declare == NULL || cursor_end == NULL)
-		return;
+		return false;
 
 	// Non declare statement goes earlier
 	if(_spl_first_non_declare->remain_size > declare->remain_size)
@@ -189,7 +189,11 @@ void SqlParser::MySQLMoveCursorDeclarations(Token *declare, Token *cursor_end)
 
 		if(semi == NULL)
 			APPEND_NOFMT(_spl_last_declare, ";");
+
+		return true;
 	}
+
+	return false;
 }
 
 // MySQL DEFINER, ALGORITHM clauses in CREATE statements

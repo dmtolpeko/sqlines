@@ -1,0 +1,12 @@
+<!DOCTYPE RCC><RCC version="3.0">
+<qresource>
+    <file>config.txt</file>
+    <file>stylesheet.qss</file>
+    <file>arrow.png</file>
+    <file>logo.png</file>
+    <file>openfile.svg</file>
+    <file>opentab.svg</file>
+    <file>run.svg</file>
+    <file>savefile.svg</file>
+</qresource>
+</RCC>

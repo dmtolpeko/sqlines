@@ -1,0 +1,271 @@
+/*
+ * Copyright (c) 2021 SQLines
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+.root {
+    -fx-font-family: 'sans-serif';
+}
+
+Text {
+    -fx-fill: white;
+}
+
+.menu-bar {
+    -fx-background-color: #383839;
+}
+
+.menu-bar .menu {
+    -fx-border-radius: 7 7 7 7;
+    -fx-background-radius: 7 7 7 7;
+}
+
+.menu-bar .menu:hover {
+    -fx-border-radius: 7 7 7 7;
+    -fx-background-radius: 7 7 7 7;
+}
+
+.menu-bar .menu .label {
+    -fx-text-fill: #d6d4d4;
+    -fx-border-radius: 7 7 7 7;
+    -fx-background-radius: 7 7 7 7;
+}
+
+.menu-bar .menu .menu-item {
+    -fx-font-size: 12px;
+    -fx-padding: 7 7 7 7;
+    -fx-spacing: 6px;
+    -fx-border-radius: 8 8 8 8;
+    -fx-background-radius: 8 8 8 8;
+}
+
+.tool-bar {
+    -fx-background-color: #1F1E1E;
+    -fx-text-fill: #FFFFFF;
+}
+
+#statusBar {
+    -fx-background-color: #383839;
+    -fx-text-fill: #FFFFFF;
+}
+
+.tool-bar .separator .line {
+    -fx-border-width: 0 0 0 0;
+}
+
+.tab-pane {
+    -fx-background-color: #262424;
+}
+
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: #383839;
+}
+
+.tab-pane .tab-label {
+    -fx-text-fill: #e7e6e6;
+}
+
+.tab-header-area .tab {
+    -fx-background-color: #6b6a6a;
+    -fx-text-fill: #FFFFFF;
+    -fx-padding: 2 10 2 10;
+    -fx-border-radius: 7 7 0 0;
+    -fx-background-radius: 7 7 0 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: #8f8f8f;
+}
+
+.tab .tab-close-button {
+    -fx-background-color: #111111;;
+}
+
+.choice-box {
+    -fx-background-color: #636363;
+    -fx-padding: 0 2 0 2;
+    -fx-border-radius: 7 7 7 7;
+    -fx-background-radius: 7 7 7 7;
+    -fx-faint-focus-color: transparent;
+}
+
+.choice-box:hover {
+    -fx-background-color: #7a7a7a;
+}
+
+.choice-box .label {
+    -fx-text-fill: #d6d4d4;
+}
+
+.choice-box .arrow {
+    -fx-background-color: #212121;
+}
+
+.context-menu {
+    -fx-background-color: #383839;
+    -fx-border-radius:8 8 8 8;
+    -fx-background-radius: 8 8 8 8;
+}
+
+.context-menu .label {
+    -fx-text-fill: #d6d4d4;
+}
+
+.context-menu .menu-item {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 13px;
+    -fx-padding: 5 5 5 5;
+    -fx-spacing: 4px;
+    -fx-border-radius: 7 7 7 7;
+    -fx-background-radius: 7 7 7 7;
+}
+
+.button {
+    -fx-background-color: #404040;
+    -fx-text-fill: #d6d4d4;
+    -fx-border-radius: 8 8 8 8;
+    -fx-background-radius: 8 8 8 8;
+    -fx-border-width: 1px;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.button:hover {
+    -fx-background-color: #484848;
+}
+
+.button:pressed {
+    -fx-background-color: #666565;
+}
+
+.code-area {
+    -fx-background-color: #1E1E1E;
+    -fx-font-size: 13px;
+}
+
+.code-area .selection {
+    -fx-fill: #1c374c;
+}
+
+.code-area .paragraph-box {
+    -fx-background-color: #1E1E1E;
+}
+
+.code-area .paragraph-box:has-caret {
+    -fx-background-color: #626262;;
+}
+
+.code-area .caret {
+    -fx-stroke: white;
+}
+
+.lineno {
+    -fx-text-fill: #d6d4d4;;
+    -fx-background-color: #1E1E1E;;
+    -fx-border-width: 0 0 0 0;
+    -fx-border-color: #D3D3D3FF;
+    -fx-padding: 1 15 0 7;
+    -fx-font-size: 13px;
+}
+
+.virtualized-scroll-pane {
+    -fx-background-color: #1E1E1E;
+}
+
+.virtualized-scroll-pane .scroll-bar:horizontal .track,
+.virtualized-scroll-pane .scroll-bar:vertical .track {
+    -fx-background-color: #1E1E1E;
+    -fx-border-color: #1E1E1E;
+}
+
+.virtualized-scroll-pane .scroll-bar:horizontal .thumb,
+.virtualized-scroll-pane .scroll-bar:vertical .thumb {
+    -fx-background-color: #D3D3D3FF;
+    -fx-background-insets: 2.0, 0.0, 0.0;
+    -fx-background-radius: 2.0em;
+}
+
+.virtualized-scroll-pane .scroll-bar:horizontal .thumb:hover,
+.virtualized-scroll-pane .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #9b9a9a;
+    -fx-background-insets: 2.0, 0.0, 0.0;
+    -fx-background-radius: 2.0em;
+}
+
+.virtualized-scroll-pane .scroll-bar:horizontal .increment-button,
+.virtualized-scroll-pane .scroll-bar:horizontal .decrement-button {
+    -fx-background-color: #1E1E1E;
+    -fx-background-radius: 0.0em;
+    -fx-padding: 0.0 0.0 10.0 0.0;
+}
+
+.virtualized-scroll-pane .scroll-bar:vertical .increment-button,
+.virtualized-scroll-pane .scroll-bar:vertical .decrement-button {
+    -fx-background-color: #1E1E1E;
+    -fx-background-radius: 0.0em;
+    -fx-padding: 0.0 10.0 0.0 0.0;
+}
+
+.virtualized-scroll-pane .scroll-bar .increment-arrow,
+.virtualized-scroll-pane .scroll-bar .decrement-arrow {
+    -fx-background-color: #1E1E1E;
+    -fx-padding: 0.15em 0.0;
+}
+
+.virtualized-scroll-pane .scroll-bar:vertical .increment-arrow,
+.virtualized-scroll-pane .scroll-bar:vertical .decrement-arrow {
+    -fx-background-color: #1E1E1E;
+    -fx-padding: 0.0 0.15em;
+}
+
+.text {
+    -fx-fill: #FFFFFF;
+}
+
+.keyword {
+    -fx-fill: #ff677c;
+    -fx-font-weight: bold;
+}
+
+.digit {
+    -fx-fill: #61b3fa;
+    -fx-font-weight: bold;
+}
+
+.char {
+    -fx-fill: #e7d530;
+    -fx-font-weight: bold;
+}
+
+.string {
+    -fx-fill: #4141f5;
+}
+
+.comment {
+    -fx-fill: #eaa36d;
+}
+
+#errorWindow {
+    -fx-background-color: #383839;
+}
+
+#aboutWindow {
+    -fx-background-color: #383839;
+}
+
+#helpWindow {
+    -fx-background-color: #383839;
+}

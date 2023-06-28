@@ -20,6 +20,7 @@
 #define sqlines_token_h
 
 #include <string>
+#include <string.h>
 
 // Token types
 #define TOKEN_WORD		1		// Keyword or unquoted identifier (will be refined later)
@@ -33,30 +34,34 @@
 #define TOKEN_FUNCTION	9		// Function
 #define TOKEN_STATEMENT	10		// Statement
 
+// Token subtype
+#define TOKEN_SUB_COLUMN_NAME         1    // Column name
+#define TOKEN_SUB_IDENT_SEQNEXTVAL    2    // Sequence nextval (ident.nextval)
+#define TOKEN_SUB_FUNC_STRING         3    // String function
+
 // Token data type
 #define TOKEN_DT_DATETIME		1		// Date and time
 #define TOKEN_DT_STRING			2		// String
 #define TOKEN_DT_NUMBER			3		// Number
 #define TOKEN_DT_INTERVAL		4		// Interval
+#define TOKEN_DT_UDT            5       // User-defined data type
 
 // Token data subtype
-#define TOKEN_DT2_DATETIME		1		// Date and time
-#define TOKEN_DT2_DATE			2		// Date only
-#define TOKEN_DT2_TIME			3		// Time only
-#define TOKEN_DT2_INT8			4		// 8-bit integer
-#define TOKEN_DT2_INTVL_MON		5		// Month interval
-#define TOKEN_DT2_INTVL_DAY		6		// Day interval
-#define TOKEN_DT2_INTVL_MIN		7		// Minute interval
-#define TOKEN_DT2_INTVL_SEC		8		// Second interval
+#define TOKEN_DT2_DATETIME		   1		// Date and time
+#define TOKEN_DT2_DATETIME_SEC	   2		// Date and time up to seconds
+#define TOKEN_DT2_DATE			   3		// Date only
+#define TOKEN_DT2_TIME			   4		// Time only
+#define TOKEN_DT2_INT			   5		// Integer
+#define TOKEN_DT2_INTVL_MON		   6		// Month interval
+#define TOKEN_DT2_INTVL_DAY		   7		// Day interval
+#define TOKEN_DT2_INTVL_MIN		   8		// Minute interval
+#define TOKEN_DT2_INTVL_SEC		   9		// Second interval
+#define TOKEN_DT2_BOOL	           10       // Boolean value
+#define TOKEN_DT2_UDT_TAB_SCALAR   11       // UDT Table of scalar values 
 
 // Token flags
 #define TOKEN_REMOVED            0x1
 #define TOKEN_INSERTED           0x2
-#define TOKEN_WARNING            0x4
-#define TOKEN_CONV_NOT_REQUIRED  0x8
-
-// Conversion notes associated with tokens
-#define TOKEN_WARN_APP_CHANGES   "Application changes are required"
 
 class TokenStr;
 
@@ -68,9 +73,17 @@ public:
 	// Token target type (was function, converted to statement i.e.)
 	char t_type;
 
+	char subtype;
+
 	// Token data type (Column type, function return value)
 	char data_type;
 	char data_subtype;
+
+	// Resolved data type for columns
+	const char *datatype_meta;
+	// Reference to table name for resolved columns
+	Token *table;
+
 	// Can contain NULL (function can return null)
 	bool nullable;
 
@@ -106,6 +119,10 @@ public:
 
 	// Line in the source code where the token appears
 	int line; 
+
+	// Open and close token for functions
+	Token *open;
+	Token *close;
 
 	// Constructor/destructor
 	Token();
@@ -189,15 +206,19 @@ public:
 
 	TokenStr() { len = 0; prev = NULL; next = NULL; }
 	TokenStr(const char *s, const wchar_t *w, size_t l) { Set(s, w, l); prev = NULL; next = NULL; }
+	TokenStr(const char *s) { if(s != NULL) Set(s, NULL, strlen(s)); prev = NULL; next = NULL; }
+	TokenStr(std::string &s) { Set(s.c_str(), NULL, s.length()); prev = NULL; next = NULL; }
 	TokenStr(Token *token);
 	
 	void Set(const char *str, const wchar_t *wstr, size_t len);
 	void Set(TokenStr &src);
+
+	const char *GetCStr() { return str.c_str(); }
 	
 	// Append a string
 	void Append(const char *str, const wchar_t *wstr, size_t len);
 	void Append(Token *token, size_t start, size_t len);
-	void Append(Token *token);
+	void Append(Token *token, bool appendSource = false);
 	void Append(TokenStr &str);
 	void Append(TokenStr &str, size_t start, size_t len);
 	void Append(int num);

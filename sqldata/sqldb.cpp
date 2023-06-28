@@ -199,6 +199,14 @@ int SqlDb::InitStaticApi(const char *conn, std::string &error)
 		mysqlApi.SetParameters(_parameters);
 		mysqlApi.SetAppLog(_log);
 
+		const char *conn = strchr(cur, ',');
+
+		if(conn != NULL)
+		{
+			conn = Str::SkipSpaces(conn + 1);
+			mysqlApi.SetConnectionString(conn);
+		}
+
 		if(_strnicmp(cur, "mariadb", 7) == 0)
 			mysqlApi.SetSubType(SQLDATA_SUBTYPE_MARIADB);
 
@@ -592,6 +600,18 @@ int SqlDb::ReadSchema(int db_types, std::string &select, std::string &exclude, b
 	return rc;
 }
 
+// Read non-table objects
+int SqlDb::ReadObjects(int db_types, std::string &select, std::string &exclude)
+{
+	int rc = 0;
+	
+	// Read the source schema only
+	if(db_types == SQLDB_SOURCE_ONLY && _source_ca.db_api != NULL)
+		rc = _source_ca.db_api->ReadObjects(select.c_str(), exclude.c_str());
+
+	return rc;
+}
+
 // Read table name by constraint name
 int SqlDb::ReadConstraintTable(int /*db_types*/, const char *schema, const char *constraint, std::string &table)
 {
@@ -612,6 +632,15 @@ int SqlDb::ReadConstraintColumns(int /*db_types*/, const char *schema, const cha
 	int rc = _source_ca.db_api->ReadConstraintColumns(schema, table, constraint, cols);
 
 	return rc;
+}
+
+// Check if identity column defined for the table
+bool SqlDb::IsIdentityDefined(int /*db_types*/, std::string &schema, std::string &table)
+{
+	if(_source_ca.db_api == NULL)
+		return false;
+
+	return _source_ca.db_api->IsIdentityDefined(schema, table);
 }
 
 // Read columns for the specified PRIMARY and UNIQUE key constraint
@@ -712,6 +741,15 @@ std::list<SqlSequences>* SqlDb::GetSequences(int /*db_type*/)
 		return NULL;
 
 	return _source_ca.db_api->GetSequences();
+}
+
+// Get stored procedures
+std::list<SqlObjMeta>* SqlDb::GetProcedures(int /*db_type*/)
+{
+	if(_source_ca.db_api == NULL)
+		return NULL;
+
+	return _source_ca.db_api->GetProcedures();
 }
 
 // Transfer table rows
@@ -1291,6 +1329,8 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		else
 		// Oracle VARCHAR2 (SQLT_CHR) ODBC SQL_VARCHAR 
 		if((source_type == SQLDATA_ORACLE && s_cols[i]._native_dt == SQLT_CHR) ||
+			// Sybase ASE CHAR and VARCHAR (CS_CHAR_TYPE for VARCHAR <= 255, and CS_LONGCHAR_TYPE for VARCHAR < 32K)
+			(source_type == SQLDATA_SYBASE && (s_cols[i]._native_dt == CS_CHAR_TYPE || s_cols[i]._native_dt == CS_LONGCHAR_TYPE)) ||			
 			// MySQL VARCHAR
 		   (source_type == SQLDATA_MYSQL && s_cols[i]._native_dt == MYSQL_TYPE_VAR_STRING) ||
 			// SQL Server, DB2, Informix, Sybase ASA VARCHAR
@@ -1355,8 +1395,6 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		if((source_type == SQLDATA_ORACLE && s_cols[i]._native_dt == SQLT_AFC) ||
 			// SQL Server CHAR
 			(source_type == SQLDATA_SQL_SERVER && s_cols[i]._native_dt == SQL_CHAR) ||
-			// Sybase ASE CHAR
-			(source_type == SQLDATA_SYBASE && s_cols[i]._native_dt == CS_CHAR_TYPE) ||
 			// Informix CHAR
 			(source_type == SQLDATA_INFORMIX && s_cols[i]._native_dt == SQL_CHAR) ||
 			// DB2 CHAR
@@ -1384,6 +1422,19 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
                 }
                 else
                     sql += "TEXT";
+    		}
+			else
+			// SQL Server allows max size 8000 for CHAR (while Informix allows 32,767)
+            if(target_type == SQLDATA_SQL_SERVER)
+			{
+                if(s_cols[i]._len <= 8000)
+                {
+                    sql += "CHAR(";
+				    sql += int1;
+				    sql += ")";
+                }
+                else
+                    sql += "VARCHAR(max)";
     		}
             else
             {
@@ -1589,9 +1640,25 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		else
 		// MySQL DOUBLE
 		if((source_type == SQLDATA_MYSQL && s_cols[i]._native_dt == MYSQL_TYPE_DOUBLE) ||
-			// SQL Server, ODBC FLOAT
-			((source_type == SQLDATA_SQL_SERVER || source_type == SQLDATA_ODBC) && 
+			// SQL Server, DB2, ODBC FLOAT
+			((source_type == SQLDATA_SQL_SERVER || source_type == SQLDATA_DB2 || source_type == SQLDATA_ODBC) && 
 				s_cols[i]._native_dt == SQL_FLOAT))
+		{
+			if(target_type == SQLDATA_SQL_SERVER)
+				sql += "FLOAT";
+			else
+			if(target_type == SQLDATA_ORACLE)
+				sql += "NUMBER";
+			else
+			if(target_type == SQLDATA_POSTGRESQL)
+				sql += "DOUBLE PRECISION";
+			else
+				sql += "DOUBLE";
+		}
+		else
+		// SQL Server, DB2, ODBC DOUBLE
+		if((source_type == SQLDATA_SQL_SERVER || source_type == SQLDATA_DB2 || source_type == SQLDATA_ODBC) && 
+				s_cols[i]._native_dt == SQL_DOUBLE)
 		{
 			if(target_type == SQLDATA_SQL_SERVER)
 				sql += "FLOAT";
@@ -1647,6 +1714,12 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 				sql += "NUMBER";
 			else
 				sql += "FLOAT";
+		}
+		else
+		// DB2 DECFLOAT(16 | 34)
+		if(source_type == SQLDATA_DB2 && s_cols[i]._native_dt == -360)
+		{
+			sql += "DOUBLE";
 		}
 		else
 		// Oracle NUMBER as DECIMAL
@@ -1752,7 +1825,13 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 			if(target_type == SQLDATA_MYSQL)
 			{
 				sql += "DATETIME(";
-				sql += fraction;
+
+				// In DB2 fraction can be up to 12, in some other databases up to 9
+				// while MySQL and MariaDB support up to 6
+				if(s_cols[i]._scale <= 6)
+					sql += fraction;
+				else
+					sql += "6";
 				sql += ')';
 			}
 			else
@@ -1798,7 +1877,9 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		if(((source_type == SQLDATA_SQL_SERVER || source_type == SQLDATA_DB2 || 
 			source_type == SQLDATA_INFORMIX || source_type == SQLDATA_ASA ||
 			source_type == SQLDATA_ODBC) && s_cols[i]._native_dt == SQL_TYPE_TIME) ||
-			(source_type == SQLDATA_SQL_SERVER && s_cols[i]._native_dt == SQL_SS_TIME2))
+			(source_type == SQLDATA_SQL_SERVER && s_cols[i]._native_dt == SQL_SS_TIME2) ||
+			// Sybase ASE TIME
+			(source_type == SQLDATA_SYBASE && s_cols[i]._native_dt == CS_TIME_TYPE))
 		{
 			char fraction[11]; 
 
@@ -1864,8 +1945,17 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		}
         else
 		// SQL Server BINARY
-		if(source_type == SQLDATA_SQL_SERVER && s_cols[i]._native_dt == SQL_BINARY)
+		if((source_type == SQLDATA_SQL_SERVER && s_cols[i]._native_dt == SQL_BINARY) ||
+			// Sybase ASE BINARY
+			(source_type == SQLDATA_SYBASE && s_cols[i]._native_dt == CS_BINARY_TYPE)) 
 		{
+			if(target_type == SQLDATA_ORACLE)
+			{
+				sql += "RAW(";
+				sql += Str::IntToString((int)s_cols[i]._len, int1);
+				sql += ")";
+			}
+			else
 			if(target_type == SQLDATA_MYSQL)
 			{
 				sql += "BINARY(";
@@ -1876,8 +1966,9 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		else
 		// Oracle RAW
 		if((source_type == SQLDATA_ORACLE && s_cols[i]._native_dt == SQLT_BIN) ||
-			// SQL Server VARBINARY
-			(source_type == SQLDATA_SQL_SERVER && s_cols[i]._native_dt == SQL_VARBINARY &&
+			// SQL Server VARBINARY, DB2 VARCHAR FOR BIT DATA
+			((source_type == SQLDATA_SQL_SERVER || source_type == SQLDATA_DB2) 
+				&& s_cols[i]._native_dt == SQL_VARBINARY &&
 			 s_cols[i]._lob == false) || 
 			// Sybase ASA BINARY is variable-length (!) data type			
 			(source_type == SQLDATA_ASA && s_cols[i]._native_dt == SQL_BINARY))
@@ -1931,8 +2022,8 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 			// Informix TEXT, Sybase ASA LONG VARCHAR
 			((source_type == SQLDATA_INFORMIX || source_type == SQLDATA_ASA || source_type == SQLDATA_ODBC) 
 				&& s_cols[i]._native_dt == SQL_LONGVARCHAR) ||
-			// DB2 CLOB with code -99
-			(source_type == SQLDATA_DB2 && s_cols[i]._native_dt == -99) ||
+			// DB2 CLOB with code -99, LONG VARCHAR with code -1
+			(source_type == SQLDATA_DB2 && (s_cols[i]._native_dt == -99 || s_cols[i]._native_dt == -1)) ||
 			// Informix CLOB with code -103
 			(source_type == SQLDATA_INFORMIX && s_cols[i]._native_dt == -103) ||
 			// MySQL CLOB
@@ -1952,9 +2043,11 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		}
 		else
 		// SQL Server NTEXT, Sybase ASA LONG NVARCHAR
-		if((source_type == SQLDATA_SQL_SERVER || source_type == SQLDATA_INFORMIX || 
+		if(((source_type == SQLDATA_SQL_SERVER || source_type == SQLDATA_INFORMIX || 
 			source_type == SQLDATA_ASA || source_type == SQLDATA_ODBC) 
-			&& s_cols[i]._native_dt == SQL_WLONGVARCHAR)
+			&& s_cols[i]._native_dt == SQL_WLONGVARCHAR) ||
+			// Sybase ASE UNITEXT
+			(source_type == SQLDATA_SYBASE && s_cols[i]._native_dt == CS_UNITEXT_TYPE))
 		{
 			if(target_type == SQLDATA_SQL_SERVER)
 				sql += "NVARCHAR(MAX)";
@@ -2065,6 +2158,12 @@ int SqlDb::GenerateCreateTable(SqlCol *s_cols, const char *s_table, const char *
 		// Get DEFAULT if it is a literal (MySQL i.e. requires full column specification in ALTER TABLE)
 		GetDefaultClause(s_table, s_cols[i]._name, default_clause);
 
+		if(source_type == SQLDATA_DB2 && target_type == SQLDATA_MYSQL && default_clause.empty() == false)
+		{
+			sql += " DEFAULT ";
+			sql += default_clause;
+		}
+
 		// Check NOT NULL attribute
 		if(s_cols[i]._nullable == false || IsPrimaryKeyColumn(s_table, s_cols[i]._name))
 			sql += " NOT NULL";
@@ -2151,8 +2250,22 @@ int	SqlDb::GetDefaultClause(const char *s_table, char *column, std::string &defa
 	if(target_type != SQLDATA_MYSQL)
 		return 0;
 
+	std::string def_clause;
+
 	if(_metaSqlDb != NULL)
-		_metaSqlDb->_source_ca.db_api->GetColumnDefault(s_table, column, default_clause);
+		_metaSqlDb->_source_ca.db_api->GetColumnDefault(s_table, column, def_clause);
+
+	// MySQL allows only string literals, numbers and some functions
+	if(def_clause.empty() == false)
+	{
+		const char *d = def_clause.c_str();
+
+		if(*d == '\'' || (*d >= '0' && *d <= '9') || !_stricmp(d, "CURRENT_TIMESTAMP"))
+			default_clause = def_clause;
+		else 
+		if(!_stricmp(d, "CURRENT TIMESTAMP"))
+			default_clause = "CURRENT_TIMESTAMP";
+	}
 
 	return 0;
 }
@@ -2306,12 +2419,15 @@ void SqlDb::MapColumn(const char *s_table, const char *s_name, std::string &t_na
 		// Check for a reserved word in the target database
 		bool resword = _target_ca.db_api->IsReservedWord(s_name);
 
-		if(resword)
+		// Check for space (Sybase ASE, ASA i.e. return unqouted identifier when space inside)
+		bool space = strchr(s_name, ' ') != NULL ? true : false;
+
+		if(resword || space)
 			t_name += '"';
 
 		t_name += s_name;
 
-		if(resword)
+		if(resword || space)
 			t_name += '"';
 
 		// The length must not exceed 30 characters
@@ -2625,10 +2741,10 @@ int SqlDb::ValidateRows(SqlDataReply &reply)
 	{
 		strncpy(reply.data2, diff_cols_list.c_str(), 1023);
 		reply.data2[1023] = '\x0';
-
-		reply.s_sql_l = s_select;
-		reply.t_sql_l = t_select;
 	}
+
+	reply.s_sql_l = s_select;
+	reply.t_sql_l = t_select;
 
 	reply._s_bigint1 = s_all_bytes;
 	reply._t_bigint1 = t_all_bytes;
@@ -3351,6 +3467,19 @@ int SqlDb::BuildQuery(std::string &s_query, std::string &t_query, const char *s_
 					}
 				}
 				else
+				// Oracle XMLTYPE column that fetched as object type in OCI
+				if(source_type == SQLDATA_ORACLE && d != NULL && !_stricmp(d, "XMLTYPE"))
+				{
+					s_query += "XMLSERIALIZE(CONTENT \"";
+					s_query += c;
+					s_query += "\" AS CLOB) AS ";
+					s_query += c;
+
+					t_query += c;
+
+					column_added = true;
+				}
+				else
 				// Oracle stores quoted columns without " but in the same case as they specified in CREATE TABLE
 				if(source_type == SQLDATA_ORACLE)
 				{
@@ -3365,6 +3494,27 @@ int SqlDb::BuildQuery(std::string &s_query, std::string &t_query, const char *s_
 						t_query += c;
 						t_query += "]";
 					}
+					else
+					if(target_type == SQLDATA_MYSQL)
+					{
+						t_query += '`';
+						t_query += c;
+						t_query += "`";
+					}
+					else
+						t_query += c;
+
+					column_added = true;
+				}
+				else
+				// Sybase ASE stores columns without [] even if they are reserved words or contain spaces
+				if(source_type == SQLDATA_SYBASE)
+				{
+					s_query += '[';
+					s_query += c;
+					s_query += ']';
+				
+					t_query += c;
 
 					column_added = true;
 				}

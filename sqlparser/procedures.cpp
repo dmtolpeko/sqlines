@@ -24,7 +24,7 @@
 // Parse a system procedure 
 bool SqlParser::ParseSystemProcedure(Token *execute, Token *name)
 {
-	// EXECUTE | EXEC is optional
+	// EXECUTE | EXEC is optional (in SQL Server)
 
 	bool exists = false;
 	bool name_fetched = false;
@@ -41,11 +41,18 @@ bool SqlParser::ParseSystemProcedure(Token *execute, Token *name)
     if(TOKEN_CMP(name, "RAISE_APPLICATION_ERROR") == true)
         exists = ParseProcedureRaiseApplicationError(name);
     else
-	if(TOKEN_CMP(name, "SP_ADDTYPE") == true)
+	if(TOKEN_CMP(name, "SP_ADDTYPE") || TOKEN_CMP(name, "SYS.SP_ADDTYPE"))
 		exists = ParseProcedureSpAddType(execute, name);
 	else
-	if(TOKEN_CMP(name, "SP_BINDRULE") == true)
+	if(TOKEN_CMP(name, "SP_BINDRULE") || TOKEN_CMP(name, "SYS.SP_BINDRULE"))
 		exists = ParseProcedureSpBindRule(execute, name);
+	else
+	if(TOKEN_CMP(name, "SP_ADDEXTENDEDPROPERTY") || TOKEN_CMP(name, "SYS.SP_ADDEXTENDEDPROPERTY"))
+		exists = ParseProcedureSpAddExtendedProperty(execute, name);
+	else
+	// Check for system procedure prefix (like sp_ in SQL Server)
+	if(ParseUnknownSystemProcedure(name))
+		exists = true;
 	else
 	if(name_fetched == true)
 		PushBack(name);
@@ -57,6 +64,11 @@ bool SqlParser::ParseSystemProcedure(Token *execute, Token *name)
 bool SqlParser::ParseProcedureRaiseApplicationError(Token *name)
 {
     Token *open = TOKEN_GETNEXT('(');
+
+	STATS_DECL
+	STATS_DTL_DECL
+
+	STATS_SET_DESC(SQL_PROC_RAISE_APPLICATION_ERROR_DESC)
 
     if(open == NULL)
         return false;
@@ -70,9 +82,32 @@ bool SqlParser::ParseProcedureRaiseApplicationError(Token *name)
         return false;
 
     // Error message
-    /*Token *error_mess */ (void) ParseExpression();
+    Token *error_mess = ParseExpression();
 
-    /*Token *close */ (void) TOKEN_GETNEXT(')');
+	if(error_mess == NULL)
+        return false;
+
+    Token *close = TOKEN_GETNEXT(')');
+
+	if(_target == SQL_SQL_SERVER)
+	{
+		// Make error number part of the error mesage
+		if(error_mess->type == TOKEN_STRING)
+		{
+			// -20000, 'Text' -> '-20000 Text'
+			TokenStr mess;
+			APPENDSTR(mess, "'");
+			mess.Append(error_num);
+			APPENDSTR(mess, " ");
+			mess.Append(error_mess, 1, error_mess->len - 1);
+
+			Token::ChangeNoFormat(error_num, mess);
+			Token::Remove(comma, error_mess);
+		}
+
+		TOKEN_CHANGE(name, "RAISERROR");
+		PREPEND_NOFMT(close, ", 16, 1");
+	}
 
     PROC_STATS(name) 
 
@@ -84,7 +119,7 @@ bool SqlParser::ParseProcedureRaiseApplicationError(Token *name)
         st.Append(error_num);
         st.Append(", text)", L", text)", 9);
 
-        PROC_DTL_STATS(&st)
+		PROC_DTL_STATS(st.GetCStr(), name)
     }
 
     return true;
@@ -95,6 +130,8 @@ bool SqlParser::ParseProcedureSpAddType(Token *execute, Token *sp_addtype)
 {
 	if(sp_addtype == NULL)
 		return false;
+
+	STATS_DECL
 
 	// User-defined data type name
 	Token *name = GetNextToken();
@@ -165,6 +202,8 @@ bool SqlParser::ParseProcedureSpAddType(Token *execute, Token *sp_addtype)
 	// Add statement delimiter if not set when source is SQL Server, Sybase ASE
 	SqlServerAddStmtDelimiter(true);
 
+	PROC_STATS(name)
+
 	return true;
 }
 
@@ -173,6 +212,8 @@ bool SqlParser::ParseProcedureSpBindRule(Token *execute, Token *sp_bindrule)
 {
 	if(sp_bindrule == NULL)
 		return false;
+
+	STATS_DECL
 
 	// Rule name created using CREATE RULE statement
 	Token *name = GetNextToken();
@@ -251,5 +292,172 @@ bool SqlParser::ParseProcedureSpBindRule(Token *execute, Token *sp_bindrule)
 	// Add statement delimiter if not set when source is SQL Server, Sybase ASE
 	SqlServerAddStmtDelimiter(true);
 
+	PROC_STATS(sp_bindrule) 
+
 	return true;
+}
+
+// SQL Server sp_addextendedproperty
+bool SqlParser::ParseProcedureSpAddExtendedProperty(Token *execute, Token *sp_extendedproperty)
+{
+	if(sp_extendedproperty == NULL)
+		return false;
+
+	STATS_DECL
+	STATS_SET_DESC(SQL_PROC_SP_ADDEXTENDED_PROPERTY_DESC)
+
+	Token *name = NULL;
+	Token *value = NULL;
+    
+	Token *level0_type =  NULL;
+    Token *level0_name =  NULL;
+    
+	Token *level1_type =  NULL;
+    Token *level1_name =  NULL;
+    
+	Token *level2_type =  NULL;
+    Token *level2_name =  NULL;
+
+	int no_named_param_cnt = 1;
+
+	while(true)
+	{
+		Token *next = GetNext();
+
+		if(next == NULL)
+			break;
+
+		Token *equal = TOKEN_GETNEXT('=');
+
+		// Check for named parameter starting with @ following by = 
+		if(TOKEN_CMP_PART0(next, "@") && equal != NULL)
+		{
+			Token *val = GetNextToken();
+
+			if(TOKEN_CMP(next, "@name"))
+				name = val;
+			else
+			if(TOKEN_CMP(next, "@value"))
+				value = val;
+			else
+			if(TOKEN_CMP(next, "@level0type"))
+				level0_type = val;
+			else
+			if(TOKEN_CMP(next, "@level0name"))
+				level0_name = val;
+			else
+			if(TOKEN_CMP(next, "@level1type"))
+				level1_type = val;
+			else
+			if(TOKEN_CMP(next, "@level1name"))
+				level1_name = val;
+			else
+			if(TOKEN_CMP(next, "@level2type"))
+				level2_type = val;
+			else
+			if(TOKEN_CMP(next, "@level2name"))
+				level2_name = val;
+
+			if(Target(SQL_MARIADB, SQL_MYSQL))
+				Token::Remove(next, equal);
+		}
+		else
+		// Parameters by position
+		{
+			switch(no_named_param_cnt) {
+				case 1: name = next; break;
+				case 2: value = next; break;
+				case 3: level0_type = next; break;
+				case 4: level0_name = next; break;
+				case 5: level1_type = next; break;
+				case 6: level1_name = next; break;
+				case 7: level2_type = next; break;
+				case 8: level2_name = next; break;
+			}
+
+			ParseExpression(next);
+			no_named_param_cnt++;
+		}
+
+		Token *comma = TOKEN_GETNEXT(',');
+
+		if(comma == NULL)
+			break;
+
+		if(Target(SQL_MARIADB, SQL_MYSQL))
+			Token::Remove(comma);
+	}
+
+	// Check for a comment for a table or column - N'MS_Description'
+	if(TOKEN_CMP(name, "N'MS_Description'") || TOKEN_CMP(name, "'MS_Description'"))
+	{
+		// Table comment (no 'Column' parameter in call)
+		if(level2_name == NULL)
+		{
+			// ALTER TABLE name COMMENT 'comment' table comment
+			if(Target(SQL_MARIADB, SQL_MYSQL))
+			{
+				TOKEN_CHANGE(Nvl(execute, sp_extendedproperty), "ALTER TABLE");
+				PREPEND_FMT(value, "COMMENT ", Nvl(execute, sp_extendedproperty));
+
+				if(execute != NULL)
+					Token::Remove(sp_extendedproperty);
+
+				TokenStr table_name;
+
+				// Table name usually quoted, for example, 'employees'
+				if(TOKEN_CMP_PART0(level1_name, "'") && level1_name->len > 2)
+					table_name.Append(level1_name, 1, level1_name->len - 2);
+				else
+					table_name.Append(level1_name);
+
+				// Add a table name
+				APPEND_NOFMT(sp_extendedproperty, " ");
+				APPENDS(sp_extendedproperty, &table_name);
+				
+				Token::Remove(name);
+
+				Token::Remove(level0_type);
+				Token::Remove(level0_name);
+    			
+				Token::Remove(level1_type);
+				Token::Remove(level1_name);
+
+				STATS_SET_CONV_OK(Target(SQL_MARIADB, SQL_MYSQL)) 
+			}
+		}
+	}
+
+	// Add statement delimiter if not set when source is SQL Server, Sybase ASE
+	SqlServerAddStmtDelimiter(true);
+
+	PROC_STATS(sp_extendedproperty) 
+
+	return true;
+}
+
+// Unknown system procedure
+bool SqlParser::ParseUnknownSystemProcedure(Token *name)
+{
+	if(name == NULL)
+		return false;
+
+	STATS_DECL
+
+	bool exists = false;
+
+	// SQL Server system procedures start with sys.sp_xxx or sp_xxx
+	if(_source == SQL_SQL_SERVER)
+	{
+		if(TOKEN_CMP_PART0(name, "SYS.SP_") || TOKEN_CMP_PART0(name, "SP_"))
+			exists = true;
+	}
+
+	if(exists)
+	{
+		STATS_SET_DESC(SQL_PROC_SYSTEM_PROC_DESC)
+		PROC_STATS(name) 
+	}
+
+	return exists;
 }

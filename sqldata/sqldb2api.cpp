@@ -98,7 +98,8 @@ int SqlDb2Api::Init()
 				break;
 		}		
 	}
-
+#else
+	_dll = Os::LoadLibrary(DB2_DLL);
 #endif
 
 	// Get functions
@@ -420,6 +421,14 @@ int SqlDb2Api::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 	{
 		// Data type CHAR or VARCHAR
 		if(_cursor_cols[i]._native_dt == SQL_CHAR || _cursor_cols[i]._native_dt == SQL_VARCHAR)
+		{
+			_cursor_cols[i]._native_fetch_dt = SQL_C_CHAR;
+			_cursor_cols[i]._fetch_len = _cursor_cols[i]._len + 1;
+			_cursor_cols[i]._data = new char[_cursor_cols[i]._fetch_len * _cursor_allocated_rows];
+		}	
+		else
+		// LONG VARCHAR, len is 32700
+		if(_cursor_cols[i]._native_dt == -1)
 		{
 			_cursor_cols[i]._native_fetch_dt = SQL_C_CHAR;
 			_cursor_cols[i]._fetch_len = _cursor_cols[i]._len + 1;

@@ -25,6 +25,8 @@ SqlAsaApi::SqlAsaApi()
 
 	_native_error = 0;
 	_native_error_text[0] = '\x0';
+
+	_char_as_wchar = false;
 }
 
 SqlAsaApi::~SqlAsaApi()
@@ -99,6 +101,9 @@ int SqlAsaApi::Connect(size_t *time_spent)
 		SetError(SQL_HANDLE_DBC, _hdbc);
 		return -1;
 	}
+
+	// Initialize session
+	InitSession();
 
 	// Set session attributes
 	rc = SetSession();
@@ -266,7 +271,13 @@ int SqlAsaApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
       
 		_cursor_cols[i]._native_dt = native_dt;
 		_cursor_cols[i]._len = column_size;
-		
+
+		// All char data is set to be extracted as wide char (UTF-16/UCS-2)
+		if((native_dt == SQL_CHAR || native_dt == SQL_VARCHAR) && !catalog_query && _char_as_wchar)
+		{
+			_cursor_cols[i]._native_dt = (native_dt == SQL_CHAR) ? SQL_WCHAR : SQL_WVARCHAR;
+		}
+		else
 		// For DECIMAL/NUMERIC column size includes precision only
 		if(native_dt == SQL_DECIMAL || native_dt == SQL_NUMERIC)
 		{
@@ -563,7 +574,7 @@ int SqlAsaApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 		*allocated_array_rows = _cursor_allocated_rows;
 
 	if(rows_fetched != NULL)
-		*rows_fetched = _cursor_fetched;
+		*rows_fetched = (int)_cursor_fetched;
 	
 	if(cols != NULL)
 		*cols = _cursor_cols;
@@ -605,7 +616,7 @@ int SqlAsaApi::Fetch(int *rows_fetched, size_t *time_spent)
 	}
 
 	if(rows_fetched != NULL)
-		*rows_fetched = _cursor_fetched;
+		*rows_fetched = (int)_cursor_fetched;
 
 	if(time_spent != NULL)
 		*time_spent = GetTickCount() - start;
@@ -904,6 +915,10 @@ int SqlAsaApi::ReadSchema(const char *select, const char *exclude, bool read_cns
 	}
 
 	ReadReservedWords();
+
+	// Reset initialization error text so it will not be later associated with the data transfer
+	*_native_error_text = '\x0';
+	_error = 0;
 
 	return rc;
 }
@@ -2249,6 +2264,19 @@ int SqlAsaApi::ReadReservedWords()
 	return 0;
 }
 
+// Initialize session
+int SqlAsaApi::InitSession()
+{
+	if(_parameters == NULL)
+		return -1;
+
+	SqlApiBase::InitSession();
+
+	if(_parameters->GetTrue("-sybase_asa_char_as_wchar") != NULL)
+		_char_as_wchar = true;
+
+	return 0;
+}
 // Set session attributes
 int SqlAsaApi::SetSession()
 {

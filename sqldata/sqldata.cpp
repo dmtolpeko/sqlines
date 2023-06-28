@@ -347,8 +347,24 @@ int SqlData::CreateMetadataQueues(std::string &select, std::string &exclude)
 			{
 				task.type = SQLDATA_CMD_ADD_CHECK_CONSTRAINT;
 
+				// Add if( to force a boolean condition conversion - without closing ')'
+				std::string condition_source("if(");
+				condition_source += (*i).condition;
+
+				std::string condition_target;
+
+				// Convert condition to the target syntax seperately (not entire ALTER TABLE statement)
+				// to avoid unintended changes in identifiers
+				ConvertSql(condition_source, condition_target);	
+
 				clause += " CHECK (";
-				clause += (*i).condition;
+
+				// Remove "if("
+				if(condition_target.size() > 3)
+					clause += condition_target.c_str() + 3;
+				else
+					clause += condition_target;
+
 				clause += ")";
 			}
 			else
@@ -357,6 +373,11 @@ int SqlData::CreateMetadataQueues(std::string &select, std::string &exclude)
 			{
 				if((*i).type == 'P')
 				{
+					// For target MySQL, MariaDB a primary key is defined in CREATE TABLE
+					// if the table has an identity column, so skip PK in ALTER TABLE
+					if(_target_type == SQLDATA_MYSQL && IsIdentityDefined(schema, table))
+						continue;
+
 					task.type = SQLDATA_CMD_ADD_PRIMARY_KEY;
 					clause += " PRIMARY KEY (";
 				}
@@ -369,7 +390,7 @@ int SqlData::CreateMetadataQueues(std::string &select, std::string &exclude)
 				std::string key_cols;
 
 				// Get columns
-				GetKeyConstraintColumns((*i), key_cols);
+				GetKeyConstraintColumns(task, (*i), key_cols);
 
 				clause += key_cols;
 				clause += ")";
@@ -449,7 +470,7 @@ int SqlData::CreateMetadataQueues(std::string &select, std::string &exclude)
 				std::string ptable_t;
 
 				// Get foreign key columns
-				GetForeignKeyConstraintColumns((*i), fcols, pcols, ptable);
+				GetForeignKeyConstraintColumns(task, (*i), fcols, pcols, ptable);
 				
 				// Map referenced table name
 				MapObjectName(ptable, ptable_t);
@@ -479,7 +500,7 @@ int SqlData::CreateMetadataQueues(std::string &select, std::string &exclude)
 			std::string cns_name;
 
 			// Get the target constraint name
-			MapConstraintName((*i).constraint, cns_name, (*i).type, ptable.c_str());
+			MapConstraintName((*i).constraint, cns_name, (*i).type, task.s_name, ptable);
 
 			if(cns_name.empty() == false)
 			{
@@ -617,6 +638,54 @@ int SqlData::CreateMetadataQueues(std::string &select, std::string &exclude)
 			_meta_tasks.push_back(task);
 		}
 	}
+
+	return rc;
+}
+
+// Create tasks queue to transfer non-table objects
+int SqlData::CreateObjectQueue(std::string &select, std::string &exclude, int *total_obj, int *total_lines, int *total_bytes)
+{
+	size_t obj_cnt  = 0;
+	size_t obj_lines  = 0;
+	size_t obj_bytes  = 0;
+
+	_obj_meta_tasks.clear();
+
+	// Read source objects
+	int rc = _db.ReadObjects(SQLDB_SOURCE_ONLY, select, exclude);
+
+	// Stored procedures
+	std::list<SqlObjMeta> *procedures = _db.GetProcedures(SQLDB_SOURCE_ONLY);
+
+	if(procedures != NULL)
+	{
+		obj_cnt += procedures->size();
+
+		for(std::list<SqlObjMeta>::iterator i = procedures->begin(); i != procedures->end(); i++)
+		{
+			SqlObjMetaTask task;
+			task.source = &(*i);
+
+			_obj_meta_tasks.push_back(task);
+
+			size_t bytes = 0;
+			size_t lines = 0;
+
+			Str::GetSizeAndLines((*i).text, &bytes, &lines);
+
+			obj_bytes += bytes;
+			obj_lines += lines;			
+		}
+	}
+
+	if(total_obj != NULL)
+		*total_obj = obj_cnt;
+
+	if(total_lines != NULL)
+		*total_lines = obj_lines;
+
+	if(total_bytes != NULL)
+		*total_bytes = obj_bytes;
 
 	return rc;
 }
@@ -837,6 +906,67 @@ void SqlData::SetSchemaMapping()
 	}
 }
 
+// Set table name mapping
+void SqlData::SetTableMappingFromFile(std::string &file)
+{
+	// Mapping file size
+	int size = File::GetFileSize(file.c_str());
+
+	if(size == -1)
+		return;
+ 
+	char *input = new char[(size_t)size + 1];
+
+	// Get content of the file (without terminating 'x0')
+	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
+	{
+		delete input;
+		return;
+	}
+
+	input[size] = '\x0';
+	char *cur = input;
+
+	// Parse mapping file
+	while(*cur)
+	{
+		std::string source;
+		std::string target;
+
+		cur = Str::SkipComments(cur);
+
+		if(*cur == '\x0')
+			break;
+
+		// Get the source table name until ,
+		while(*cur && *cur != ',')
+		{
+			source += *cur;
+			cur++;
+		}
+
+		Str::TrimTrailingSpaces(source);
+
+		if(*cur == ',')
+			cur++;
+		else
+			break;
+
+		cur = Str::SkipSpaces(cur);
+
+		// Get the target table name until new line
+		while(*cur && *cur != '\r' && *cur != '\n')
+		{
+			target += *cur;
+			cur++;
+		}
+
+		Str::TrimTrailingSpaces(target);
+
+		_table_map.insert(std::pair<std::string, std::string>(source, target));
+	}
+}
+
 // Set column name mapping
 void SqlData::SetColumnMappingFromFile(std::string &file)
 {
@@ -911,8 +1041,8 @@ void SqlData::SetColumnMappingFromFile(std::string &file)
 
 		cur = Str::SkipSpaces(cur);
 
-		// Get target column name until ,
-		while(*cur && *cur != ',')
+		// Get target column name until , or newline/tab
+		while(*cur && *cur != ',' && *cur != '\r' && *cur != '\n' && *cur != '\t')
 		{
 			col.t_name += *cur;
 			cur++;
@@ -924,7 +1054,10 @@ void SqlData::SetColumnMappingFromFile(std::string &file)
 			cur++;
 		// Data type is optional
 		else
+		{
+			_column_map.push_back(col);
 			continue;
+		}
 
 		cur = Str::SkipSpaces(cur);
 
@@ -938,6 +1071,85 @@ void SqlData::SetColumnMappingFromFile(std::string &file)
 		Str::TrimTrailingSpaces(col.t_type);
 
 		_column_map.push_back(col);
+	}
+}
+
+// Set constraint name mapping
+void SqlData::SetConstraintMappingFromFile(std::string &file)
+{
+	// Mapping file size
+	int size = File::GetFileSize(file.c_str());
+
+	if(size == -1)
+		return;
+ 
+	char *input = new char[(size_t)size + 1];
+
+	// Get content of the file (without terminating 'x0')
+	if(File::GetContent(file.c_str(), input, (unsigned int)size) == -1)
+	{
+		delete input;
+		return;
+	}
+
+	input[size] = '\x0';
+
+	char *cur = input;
+
+	// Parse mapping file
+	while(*cur)
+	{
+		std::string table;
+		std::string source_cns;
+		std::string target_cns;
+
+		cur = Str::SkipComments(cur);
+
+		if(*cur == '\x0')
+			break;
+
+		// Get schema.table until ,
+		while(*cur && *cur != ',')
+		{
+			table += *cur;
+			cur++;
+		}
+
+		Str::TrimTrailingSpaces(table);
+
+		if(*cur == ',')
+			cur++;
+		else
+			break;
+
+		cur = Str::SkipSpaces(cur);
+
+		// Get source constraint name until ,
+		while(*cur && *cur != ',')
+		{
+			source_cns += *cur;
+			cur++;
+		}
+
+		Str::TrimTrailingSpaces(source_cns);
+
+		if(*cur == ',')
+			cur++;
+		else
+			break;
+
+		cur = Str::SkipSpaces(cur);
+
+		// Get target constraint name until , or newline or tab
+		while(*cur && *cur != ',' && *cur != '\r' && *cur != '\n' && *cur != '\t')
+		{
+			target_cns += *cur;
+			cur++;
+		}
+
+		Str::TrimTrailingSpaces(target_cns);
+
+		_cns_map.insert(std::pair<std::string, std::string>(table + ',' + source_cns, target_cns));
 	}
 }
 
@@ -1528,16 +1740,10 @@ int SqlData::StartLocalWorker(SqlDb *sqlDb)
 			reply.rc = sqlDb->ExecuteNonQuery(SQLDB_TARGET_ONLY, reply, task.statement.c_str());
 		}
 		else
-		// Add a CHECK constraint (expression conversion is performed)
+		// Add a CHECK constraint (expression conversion was already performed)
 		if(task.type == SQLDATA_CMD_ADD_CHECK_CONSTRAINT)
 		{
-			std::string source_stmt = task.statement;
-			std::string target_stmt;
-
-			// Convert SQL to the target syntax
-			ConvertSql(source_stmt, target_stmt);
-
-			reply.rc = sqlDb->ExecuteNonQuery(SQLDB_TARGET_ONLY, reply, target_stmt.c_str());
+			reply.rc = sqlDb->ExecuteNonQuery(SQLDB_TARGET_ONLY, reply, task.statement.c_str());
 		}
 		else
 		if(task.type == SQLDATA_CMD_CREATE_SEQUENCE)
@@ -1913,6 +2119,15 @@ bool SqlData::IsSequencesCreated()
 // Get the target name
 void SqlData::MapObjectName(std::string &source, std::string &target)
 {
+	// Check if the mapping for this table name is specified
+	std::map<std::string, std::string>::iterator i = _table_map.find(source);
+
+	if(i != _table_map.end())
+	{
+		target = i->second;
+		return;
+	}
+
 	if(_schema_map.empty() == true)
 	{
 		target = source;
@@ -1946,14 +2161,33 @@ void SqlData::MapObjectName(std::string &source, std::string &target)
 		s_schema.clear();
 	}
 
-	MapObjectName(s_schema, s_table, target);
+	MapObjectName(s_schema, s_table, target, false);
 }
 
-void SqlData::MapObjectName(std::string &s_schema, std::string &s_table, std::string &t_name)
+void SqlData::MapObjectName(std::string &s_schema, std::string &s_table, std::string &t_name, bool tmap)
 {
 	std::string t_schema;
 	std::string t_table;
+	
+	// Check if the mapping for this table name is specified
+	if(tmap)
+	{
+		std::string source;
 
+		if(!s_schema.empty())
+			source = s_schema + '.';
+
+		source += s_table;
+
+		std::map<std::string, std::string>::iterator i = _table_map.find(source);
+
+		if(i != _table_map.end())
+		{
+			t_name = i->second;
+			return;
+		}
+	}
+	
 	MapObjectName(s_schema, s_table, t_schema, t_table);
 
 	if(t_schema.empty() == false)
@@ -2041,10 +2275,19 @@ void SqlData::MapObjectName(std::string &s_schema, std::string &s_table, std::st
 }
 
 // Map the constraint name
-void SqlData::MapConstraintName(const char *source, std::string &target, char type, const char* p_table) 
+void SqlData::MapConstraintName(const char *source, std::string &target, char type, std::string &table, std::string &p_table) 
 {
 	if(source == NULL)
-		return ;
+		return;
+
+	// Check if the mapping for this table constraint name is specified
+	std::map<std::string, std::string>::iterator i = _cns_map.find(std::string(table) + ',' + std::string(source));
+
+	if(i != _cns_map.end())
+	{
+		target = i->second;
+		return;
+	}
 
 	size_t len = strlen(source);
 
@@ -2056,12 +2299,12 @@ void SqlData::MapConstraintName(const char *source, std::string &target, char ty
 	// in SQL Server constraints, tables must be unique in the database
 	if(type == 'R' && _target_type == SQL_SQL_SERVER)
 	{
-		const char *tab = Str::SkipUntil(p_table, '.');
+		const char *tab = Str::SkipUntil(p_table.c_str(), '.');
 
 		if(*tab != '\x0')
 			tab++;
 		else
-			tab = p_table;
+			tab = p_table.c_str();
 
 		if(_stricmp(source, tab) == 0)
 			return;
@@ -2227,8 +2470,14 @@ int SqlData::SetConcurrentSessions(int max_sessions, int table_count)
 	return _max_sessions;
 }
 
+// Check if identity column defined for the table
+bool SqlData::IsIdentityDefined(std::string &schema, std::string &table)
+{
+	return _db.IsIdentityDefined(SQLDB_SOURCE_ONLY, schema, table);
+}
+
 // Get primary or unique key columns
-void SqlData::GetKeyConstraintColumns(SqlConstraints &cns, std::string &cols)
+void SqlData::GetKeyConstraintColumns(SqlMetaTask &task, SqlConstraints &cns, std::string &cols)
 {
 	std::list<std::string> lcols;
 	_db.GetKeyConstraintColumns(SQLDB_SOURCE_ONLY, cns, lcols);
@@ -2240,20 +2489,18 @@ void SqlData::GetKeyConstraintColumns(SqlConstraints &cns, std::string &cols)
 		if(c > 0)
 			cols += ", ";
 
-		if(_target_type == SQL_SQL_SERVER)
-			cols += '[';
+		std::string column;
+		std::string type;
 
-		cols += (*i);
+		_db.MapColumn(task.s_name.c_str(), (*i).c_str(), column, type);
 
-		if(_target_type == SQL_SQL_SERVER)
-			cols += ']';
-
+		cols += column;
 		c++;
 	}
 }
 
 // Get foreign key columns
-void SqlData::GetForeignKeyConstraintColumns(SqlConstraints &cns, std::string &fcols, std::string &pcols, std::string &ptable)
+void SqlData::GetForeignKeyConstraintColumns(SqlMetaTask &task, SqlConstraints &cns, std::string &fcols, std::string &pcols, std::string &ptable)
 {
 	std::list<std::string> lfcols;
 	std::list<std::string> lpcols;
@@ -2267,14 +2514,12 @@ void SqlData::GetForeignKeyConstraintColumns(SqlConstraints &cns, std::string &f
 		if(c > 0)
 			fcols += ", ";
 
-		if(_target_type == SQL_SQL_SERVER)
-			fcols += '[';
+		std::string column;
+		std::string type;
 
-		fcols += (*i);
+		_db.MapColumn(task.s_name.c_str(), (*i).c_str(), column, type);
 
-		if(_target_type == SQL_SQL_SERVER)
-			fcols += ']';
-
+		fcols += column;
 		c++;
 	}
 
@@ -2285,14 +2530,12 @@ void SqlData::GetForeignKeyConstraintColumns(SqlConstraints &cns, std::string &f
 		if(c > 0)
 			pcols += ", ";
 
-		if(_target_type == SQL_SQL_SERVER)
-			pcols += '[';
+		std::string column;
+		std::string type;
 
-		pcols += (*i);
+		_db.MapColumn(ptable.c_str(), (*i).c_str(), column, type);
 
-		if(_target_type == SQL_SQL_SERVER)
-			pcols += ']';
-
+		pcols += column;
 		c++;
 	}
 }
@@ -2359,7 +2602,9 @@ void SqlData::GetIdentityMetaTask(SqlColMeta &col)
 	char start_str[11]; 
 	char inc_str[11]; 
 
-	sprintf(start_str, "%d", col.id_next);
+	int start = (col.id_next > 0) ? col.id_next : col.id_start;
+
+	sprintf(start_str, "%d", start);
 	sprintf(inc_str, "%d", col.id_inc);
 
 	// Create sequence
@@ -2372,6 +2617,11 @@ void SqlData::GetIdentityMetaTask(SqlColMeta &col)
 	task.statement += inc_str;
 
 	_meta_tasks.push_back(task);
+
+	std::string column;
+	std::string type;
+
+	_db.MapColumn(task.s_name.c_str(), col.column, column, type);
 	
 	// Create trigger for Oracle
 	if(_target_type == SQLDATA_ORACLE)
@@ -2383,15 +2633,15 @@ void SqlData::GetIdentityMetaTask(SqlColMeta &col)
 		task.statement += task.t_name;
 		task.statement += " FOR EACH ROW\n";
 		task.statement += " WHEN (NEW.";
-		task.statement += col.column;
+		task.statement += column;
 		task.statement += " IS NULL OR NEW.";
-		task.statement += col.column;
+		task.statement += column;
 		task.statement += " = 0)\n";
 		task.statement += "BEGIN\n";
 		task.statement += " SELECT ";
 		task.statement += task.t_o_name;
 		task.statement += ".NEXTVAL INTO :NEW.";
-		task.statement += col.column;
+		task.statement += column;
 		task.statement += " FROM dual;\n";
 		task.statement += "END;\n";
 	}
@@ -2403,7 +2653,7 @@ void SqlData::GetIdentityMetaTask(SqlColMeta &col)
 		task.statement = "ALTER TABLE ";
 		task.statement += task.t_name;
 		task.statement += " ALTER COLUMN ";
-		task.statement += col.column;
+		task.statement += column;
 		task.statement += " SET DEFAULT nextval ('";
 		task.statement += task.t_o_name;
 		task.statement += "')";

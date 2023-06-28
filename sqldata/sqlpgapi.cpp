@@ -578,23 +578,58 @@ int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, 
 	int remain_len = LIBPQ_COPY_DATA_BUFFER_LEN;
 
 	// Copy rows
-	for(int i = 0; i < rows_fetched; i++)
+	for(size_t i = 0; i < rows_fetched; i++)
 	{
 		// Copy column data
-		for(int k = 0; k < _copy_cols_count; k++)
+		for(size_t k = 0; k < _copy_cols_count; k++)
 		{
 			int len = -1;
+			char *lob_data = NULL;
 
 			// Check whether column is null
 			if(_source_api_type == SQLDATA_ORACLE && s_cols[k]._ind2 != NULL)
 			{
 				if(s_cols[k]._ind2[i] != -1)
 				{
-					len = s_cols[k]._len_ind2[i];
-
 					// Oracle DATE column will be written as string
 					if(s_cols[k]._native_fetch_dt == SQLT_DAT)
 						len = 19;
+					else
+					// LOB column
+					if(s_cols[k]._native_fetch_dt == SQLT_BLOB || s_cols[k]._native_fetch_dt == SQLT_CLOB)
+					{
+						size_t lob_size = 0;
+
+						// Get the LOB size in bytes for BLOB, in characters for CLOB
+						int lob_rc = _source_api_provider->GetLobLength(i, k, &lob_size);
+
+						// Probably empty LOB
+						if(lob_rc != -1)
+							len = (int)lob_size;
+
+						if(lob_rc != -1 && lob_size > 0)
+						{
+							size_t alloc_size = 0;
+							int read_size = 0;
+
+							lob_data = _source_api_provider->GetLobBuffer(i, k, lob_size, &alloc_size);
+
+							// Get LOB content
+							lob_rc = _source_api_provider->GetLobContent(i, k, lob_data, alloc_size, &read_size);
+
+							// Error reading LOB
+							if(lob_rc != 0)
+							{
+								_source_api_provider->FreeLobBuffer(lob_data);
+								lob_data = NULL;
+								len = -1;								
+							}
+							else
+								len = read_size;
+						}						
+					}
+					else
+						len = s_cols[k]._len_ind2[i];
 				}
 			}
 			else
@@ -643,8 +678,10 @@ int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, 
 				bytes += 2;
 			}
 			else
-			// Oracle CHAR and VARCHAR2
-			if((_source_api_type == SQLDATA_ORACLE && s_cols[k]._native_fetch_dt == SQLT_STR) ||
+			// Oracle CHAR, VARCHAR2, LOBs 
+			if((_source_api_type == SQLDATA_ORACLE && 
+				(s_cols[k]._native_fetch_dt == SQLT_STR || s_cols[k]._native_fetch_dt == SQLT_BLOB || s_cols[k]._native_fetch_dt == SQLT_CLOB ||
+                    s_cols[k]._native_fetch_dt == SQLT_BIN || s_cols[k]._native_fetch_dt == SQLT_LNG)) ||
 				// Sybase CHAR, INT, SMALLINT
 				(_source_api_type == SQLDATA_SYBASE && s_cols[k]._native_fetch_dt == CS_CHAR_TYPE) ||
 				// ODBC CHAR, BINARY
@@ -659,7 +696,12 @@ int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, 
 				// Copy data handling escape characaters
 				for(int m = 0; m < len; m++)
 				{
-					char c = (s_cols[k]._data + s_cols[k]._fetch_len * i)[m];
+					char c = 0;
+
+					if(lob_data == NULL)
+						c = (s_cols[k]._data + s_cols[k]._fetch_len * i)[m];
+					else
+						c = lob_data[m];
 
 					// Duplicate escape \ character
 					if(c == '\\')
@@ -710,6 +752,15 @@ int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, 
 						cur++;
 						remain_len--;
 						bytes++;
+					}
+
+					// Check if we still have space to write the next byte of column data (can explode due to escape sequences)
+					if(m + 1 < len && remain_len < 5)
+					{
+						rc = _PQputCopyData(_conn, _copy_data, (int)(cur - _copy_data));
+
+						cur = _copy_data;
+						remain_len = LIBPQ_COPY_DATA_BUFFER_LEN;
 					}
 				}
 			}
@@ -772,6 +823,9 @@ int SqlPgApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written, 
 
 				bytes += 26;
 			}
+
+			if(lob_data != NULL)
+				_source_api_provider->FreeLobBuffer(lob_data);
 		}
 
 		// Add row delimiter (no need to write \r for Windows)

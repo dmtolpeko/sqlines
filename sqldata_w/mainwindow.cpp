@@ -7,6 +7,7 @@
 #include "ui_mainwindow.h"
 #include "str.h"
 #include "os.h"
+#include "license.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -37,6 +38,8 @@ MainWindow::MainWindow(QWidget *parent) :
     _source_all_rows = 0;
     _target_all_rows = 0;
     _command_start = 0;
+    
+    _sqlDataCmd.SetLicense(QApplication::arguments().at(0).toStdString().c_str());
 
     ui->oracleSidComboBox->setInsertPolicy(QComboBox::InsertAtTop);
     ui->sqlServerNameComboBox->setInsertPolicy(QComboBox::InsertAtTop);
@@ -190,6 +193,17 @@ void MainWindow::TargetChanged(QString target)
 
     title.append(" - ").append(ui->sourceComboBox->currentText());
     title.append(" to ").append(ui->targetComboBox->currentText());
+    
+    License *license = _sqlDataCmd.GetLicense();
+    
+    // Add the license message if required
+	if(license != NULL && license->IsLicenseCheckRequired())
+	{
+		if(license->IsEmpty())
+            title.append(" - FOR EVALUATION USE ONLY");
+		else
+			title.append(" - Licensed to ").append(license->GetName().c_str());
+	}
 
     setWindowTitle(title);
  }

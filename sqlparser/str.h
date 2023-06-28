@@ -19,7 +19,7 @@
 #ifndef sqlines_str_h
 #define sqlines_str_h
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(WIN64)
 
 #define _stricmp strcasecmp
 #define _strnicmp strncasecmp
@@ -44,6 +44,9 @@ public:
 
 	// Skip until the specified char is met
 	static const char* SkipUntil(const char *input, char ch);
+
+	// Get substring until the specified char is met
+	static void GetSubtringUntil(const char *input, char ch, int len, std::string &output);
 
 	// Get copy of the input string
 	static char* GetCopy(const char *input, size_t size);

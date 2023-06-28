@@ -30,7 +30,10 @@ class SqlAsaApi : public SqlApiBase
 	std::string _dsn;
 
 	// Attribute to store last number of fetched rows (SQL_ATTR_ROWS_FETCHED_PTR)
-	int _cursor_fetched;
+	SQLULEN _cursor_fetched;
+
+	// Extract all character data as 2-byte Unicode (UTF-16/UCS-2)
+	bool _char_as_wchar;
 
 public:
 	SqlAsaApi();
@@ -127,6 +130,7 @@ public:
 	bool IsQuoteRequired(const char *name);
 
 private:
+	int InitSession();
 	// Set session attributes
 	int SetSession();
 	// Set version of the connected database

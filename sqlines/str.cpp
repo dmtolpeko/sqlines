@@ -70,8 +70,8 @@ char* Str::SkipComments(const char *input)
 void Str::TrimTrailingSpaces(std::string &input)
 {
 	// Get the string length
-	size_t len = input.length();
-	size_t nlen = len;
+	int len = input.length();
+	int nlen = len;
 
 	if(len <= 0)
 		return;
@@ -90,7 +90,7 @@ char* Str::TrimTrailingSpaces(char *input)
 	if(!input)
 		return NULL;
 
-	size_t len = strlen(input);
+	int len = strlen(input);
 	char *cur = input;
 
 	while(len > 0)
@@ -148,8 +148,26 @@ const char* Str::SkipUntil(const char *input, char ch)
 	return cur;
 }
 
+// Get substring until the specified char is met
+void Str::GetSubtringUntil(const char *input, char ch, int len, std::string &output)
+{
+	unsigned int pos = 0;
+
+	do
+	{
+		if(input[pos] == ch)
+		{
+			output.assign(input, pos);
+			break;
+		}
+
+		pos++;
+
+	} while(pos < len);
+}
+
 // Get copy of the input string
-char* Str::GetCopy(const char *input, size_t size)
+char* Str::GetCopy(const char *input, int size)
 {
 	if(input == NULL)
 		return NULL;
@@ -168,7 +186,9 @@ char* Str::GetCopy(const char *input)
 	if(input == NULL)
 		return NULL;
 	
-	return Str::GetCopy(input, strlen(input));
+	int size = strlen(input);
+
+	return Str::GetCopy(input, size);
 }
 
 // Replace character in string (returns the same string)
@@ -265,11 +285,11 @@ void Str::Dt2Ch(int dt, char *ch)
 		return;
 
 	// Get the first and second digits
-	char f = (char)dt/10;
-	char s = (char)dt%10;
+	int f = dt/10;
+	int s = dt%10;
 
 	ch[0] = '0' + f;
-	ch[1] = '0' + s; 
+	ch[1] = '0' + s;
 }
 
 // _strupr() and _strlwr() functions are not available on Linux

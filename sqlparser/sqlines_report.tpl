@@ -6,7 +6,7 @@ h2 { font-family: trebuchet ms, verdana; font-size: 18px; color: #000000; border
 p { font-size: 13px; }
 table { font-size: 13px; border: 1px solid; border-collapse:collapse; }
 tr:hover td { background-color: #A4BBFE; }
-th { background: #98AFC7; padding: 0px 10px 0px 10px; border: 1px solid; }
+th { background: #FFFFFF; padding: 0px 10px 0px 10px; border: 1px solid; }
 td { padding: 0px 10px 0px 10px; border: 1px solid; }
 .td_warn { background:yellow; }
 a:link { text-decoration: none; color: #0000A0;}

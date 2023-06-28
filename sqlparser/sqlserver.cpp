@@ -169,7 +169,7 @@ void SqlParser::SqlServerDelimiter()
 // Add statement delimiter if not set when source is SQL Server, Sybase ASE
 void SqlParser::SqlServerAddStmtDelimiter(bool force)
 {
-	if(Source(SQL_SQL_SERVER, SQL_SYBASE) == false)
+	if(Source(SQL_SQL_SERVER, SQL_SYBASE) == false || TOKEN_CMPC(GetLastToken(), ';'))
 		return;
 
 	// Add the delimiter in statements in procedural block only
@@ -468,6 +468,8 @@ void SqlParser::SqlServerToDateAdd(Token *op, Token *first, Token *first_end, To
 	else
 	if(second->data_subtype == TOKEN_DT2_INTVL_SEC)
 		PREPEND_NOFMT(first, "ss");
+	else
+		PREPEND_NOFMT(first, "dd");
 
 	PREPEND_NOFMT(first, ", ");
 
@@ -636,4 +638,68 @@ bool SqlParser::ParseSqlServerUpdateStatement(Token *update)
 	SqlServerAddStmtDelimiter();
 
 	return true;
+}
+
+// Convert user-defined function name in function call
+void SqlParser::SqlServerConvertUdfIdentifier(Token *name)
+{
+	if(name == NULL)
+		return;
+
+	int parts = GetIdentPartsCount(name);
+
+	// SQL Server requires explicit schema/owner name for calling UDFs
+	if(parts == 1)
+	{
+		TokenStr name2("dbo.", L"dbo.", 4);
+		name2.Append(name);
+
+		Token::ChangeNoFormat(name, name2);
+	}
+}
+
+// For SQL Server move cursor declarations that depend on procedural variables
+void SqlParser::SqlServerMoveCursorDeclarations()
+{
+	ListwItem *cursor_item = _spl_declared_cursors_using_vars.GetFirst();
+
+	// Check of cursors that use variables
+	while(cursor_item != NULL)
+	{
+		Token *cursor = (Token*)cursor_item->value;
+		ListwmItem *open_item = _spl_open_cursors.GetFirst();
+
+		Token *declare = NULL;
+		Token *declare_end = NULL;
+
+		// Find all OPEN statements for this cursor (the same cursor can be open multiple times)
+		while(open_item != NULL)
+		{
+			Token *open_stmt = (Token*)open_item->value;
+			Token *open_cursor = (Token*)open_item->value2;
+
+			if(Token::Compare(cursor, open_cursor))
+			{
+				// Get cursor declaration statement
+				ListwmItem *declare_item = Find(_spl_declared_cursors_stmts, cursor);
+
+				if(declare_item != NULL)
+				{
+					declare = (Token*)declare_item->value2;
+					declare_end = (Token*)declare_item->value3;
+
+					PrependCopy(open_stmt, declare, declare_end, false);
+					PREPEND(open_stmt, "\n");
+				}
+			}
+
+			open_item = open_item->next;
+		}
+		
+		// Now we can remove the original declaration
+		if(declare != NULL && declare_end != NULL)
+			Token::Remove(declare, declare_end);
+
+		cursor_item = cursor_item->next;
+	}
 }

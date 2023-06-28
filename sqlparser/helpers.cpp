@@ -423,8 +423,57 @@ void SqlParser::SetMetaFromFile(const char *file)
 	}
 }
 
+// Functions mapped to stored procedures
+void SqlParser::SetFuncToSpMappingFromFile(const char *file)
+{
+	if(file == NULL)
+		return;
+
+	// Mapping file size
+	int size = File::GetFileSize(file);
+
+	if(size == -1)
+		return;
+ 
+	char *input = new char[(size_t)size + 1];
+
+	// Get content of the file (without terminating 'x0')
+	if(File::GetContent(file, input, (size_t)size) == -1)
+	{
+		delete input;
+		return;
+	}
+
+	input[size] = '\x0';
+
+	char *cur = input;
+
+	// Process input
+	while(*cur)
+	{
+		cur = Str::SkipComments(cur);
+
+		if(*cur == '\x0')
+			break;
+
+		std::string source;
+		
+		// Get the name until new line
+		while(*cur && *cur != '\r' && *cur != '\n' && *cur != '\t')
+		{
+			source += *cur;
+			cur++;
+		}
+
+		Str::TrimTrailingSpaces(source);
+
+		std::transform(source.begin(), source.end(), source.begin(), ::tolower);
+		_func_to_sp_map.insert(StringMapPair(source, ""));
+	}
+}
+
 // Read the data type from available meta information
-const char* SqlParser::GetMetaType(Token *object)
+const char* SqlParser::GetMetaType(Token *object, Token *column)
 {
     if(object == NULL)
         return NULL;
@@ -433,7 +482,13 @@ const char* SqlParser::GetMetaType(Token *object)
     TokenStr col;
 
     // Separate object and column names
-    SplitIdentifierByLastPart(object, obj, col, 2);
+	if(column == NULL)
+		SplitIdentifierByLastPart(object, obj, col, 2);
+	else
+	{
+		obj.Append(object);
+		col.Append(column);
+	}
 
     std::transform(obj.str.begin(), obj.str.end(), obj.str.begin(), ::tolower);
     std::map<std::string, ListT<Meta>*>::iterator i = _meta.find(obj.str);
@@ -585,22 +640,31 @@ bool SqlParser::CompareIdentifiersExistingParts(Token *first, Token *second)
 			GetNextIdentItem(second, part2, &len2);
 	}
 
-	for(int i = 0; i < num; i++)
+	// Single part identifier
+	if(num == 0)
 	{
-		part1.Clear();
-		part2.Clear();
-
-		GetNextIdentItem(first, part1, &len1);
-		GetNextIdentItem(second, part2, &len2);
-
-		// All parts must be equal
-		if(CompareIdentifierPart(part1, part2) == false)
-		{
-			equal = false;
-			break;
-		}
-
+		equal = Token::Compare(first, second);
 		equal_num++;
+	}
+	else
+	{
+		for(int i = 0; i < num; i++)
+		{
+			part1.Clear();
+			part2.Clear();
+
+			GetNextIdentItem(first, part1, &len1);
+			GetNextIdentItem(second, part2, &len2);
+
+			// All parts must be equal
+			if(CompareIdentifierPart(part1, part2) == false)
+			{
+				equal = false;
+				break;
+			}
+
+			equal_num++;
+		}
 	}
 
 	return (equal == true && equal_num > 0) ? true : false;
@@ -989,6 +1053,175 @@ void SqlParser::DiscloseRecordVariables(Token *format)
 	}
 }
 
+// Add declarations for implicit record fields (for cursor loops)
+void SqlParser::DiscloseImplicitRecordVariables(Token *format)
+{
+	ListwmItem *item = _spl_implicit_rowtype_fields.GetFirst();
+
+	Token *append = GetDeclarationAppend();
+	Token *fmt = Nvl(_declare_format, format);
+
+	// Add declaration for each variable
+	while(item != NULL)
+	{
+		Token *cursor = (Token*)item->value;
+		Token *var = (Token*)item->value2;
+
+		Token var_last_part;
+		var_last_part.len = var->len;
+		var_last_part.str = var->str;
+
+		TokenStr cur;
+		TokenStr col;
+
+		// Separate cursor and column names
+		SplitIdentifierByLastPart(&var_last_part, cur, col, 2);
+
+		APPEND_FMT(append, "\nDECLARE ", fmt);
+		AppendCopy(append, var);
+
+		ListwmItem *sel_item = _spl_declared_cursors_select_exp.GetFirst();
+		const char *datatype_meta = NULL;
+
+		// Try to define the data type from SELECT list expressions
+		while(sel_item != NULL)
+		{
+			Token *sel_cursor = (Token*)sel_item->value;
+			Token *sel_col = (Token*)sel_item->value2;
+
+			if(Token::Compare(cursor, sel_cursor))
+			{
+				if(sel_col->datatype_meta != NULL && Token::Compare(sel_col, &col))
+				{
+					datatype_meta = sel_col->datatype_meta;
+					break;
+				}
+				else
+				// For SELECT * FROM single table, table name may be resolved
+				if(sel_col->table != NULL && TOKEN_CMPC(sel_col, '*'))
+				{
+					Token tcol;
+					tcol.str = col.str.c_str();
+					tcol.len = col.len;
+
+					datatype_meta = GetMetaType(sel_col->table, &tcol);
+					break;
+				}
+			}
+
+			sel_item = sel_item->next;
+		}
+
+		if(datatype_meta != NULL)
+		{
+			TokenStr dt;
+			APPENDSTR(dt, " ");
+			dt.Append(datatype_meta, NULL, strlen(datatype_meta));
+			AppendNoFormat(append, &dt);			
+			APPEND(append, ";");
+		}
+		else
+		{
+			APPEND_FMT(append, " VARCHAR(200)", fmt);
+			APPEND(append, "; -- Use -meta option to resolve the data type");
+		}
+
+		item = item->next;
+	}
+
+	item = _spl_implicit_rowtype_fetches.GetFirst();
+
+	// Add column list to all generated fetch statements
+	while(item != NULL)
+	{
+		Token *cursor = (Token*)item->value;
+		Token *fetch_stmt = (Token*)item->value2;
+		Token *format = (Token*)item->value3;
+
+		ListwmItem *col_item = _spl_implicit_rowtype_fields.GetFirst();
+
+		TokenStr into_cols;
+		int cnt = 0;
+
+		// Find columns of this cursor only
+		while(col_item != NULL)
+		{
+			Token *col_cursor = (Token*)col_item->value;
+			Token *var = (Token*)col_item->value2;
+
+			if(Token::Compare(cursor, col_cursor))
+			{
+				if(cnt > 0)
+					APPENDSTR(into_cols, ", ");
+
+				into_cols.Append(var);
+				cnt++;
+			}
+
+			col_item = col_item->next;
+		}
+
+		AppendNoFormat(fetch_stmt, &into_cols);
+		APPEND_NOFMT(fetch_stmt, ";");
+		APPEND_FMT(fetch_stmt, "\n", format);
+
+		item = item->next;
+	}
+		
+	item = _spl_declared_cursors_select_first_exp.GetFirst();
+
+	// Add column list to cursor declaration that use SELECT * FROM instead of explicit column list
+	while(item != NULL)
+	{
+		Token *cursor = (Token*)item->value;
+		Token *first_select_exp = (Token*)item->value2;
+
+		if(first_select_exp == NULL || !TOKEN_CMPC(first_select_exp, '*')) 
+		{
+			item = item->next;
+			continue;
+		}
+		
+		ListwmItem *col_item = _spl_implicit_rowtype_fields.GetFirst();
+
+		TokenStr cursor_cols;
+		int cnt = 0;
+
+		// Find columns of this cursor only
+		while(col_item != NULL)
+		{
+			Token *col_cursor = (Token*)col_item->value;
+			Token *var = (Token*)col_item->value2;
+
+			if(Token::Compare(cursor, col_cursor))
+			{
+				if(cnt > 0)
+					APPENDSTR(cursor_cols, ", ");
+
+				TokenStr cur;
+				TokenStr col;
+
+				Token var_src;
+				var_src.len = var->len;
+				var_src.str = var->str;
+
+				// Separate cursor and column names
+				SplitIdentifierByLastPart(&var_src, cur, col, 2);
+
+				cursor_cols.Append(col);
+				cnt++;
+			}
+
+			col_item = col_item->next;
+		}
+
+		// Replace * with column list
+		Token::ChangeNoFormat(first_select_exp, cursor_cols);
+
+		item = item->next;
+	}		
+}
+
 // Cut operation
 void SqlParser::Cut(int scope, int type, Token *name, Token *start, Token *end)
 {
@@ -1139,26 +1372,104 @@ Token* SqlParser::GetDeclarationAppend()
 {
 	Token *append = _spl_last_declare;
 
-	// Skip ; that can follow the last declarat
-	while(append != NULL && append->next != NULL)
+	if(!TOKEN_CMPC(append, ';'))
 	{
-		// Skip spaces
-		if(append->next->IsBlank())
+		// Skip ; that can follow the last declaration
+		while(append != NULL && append->next != NULL)
 		{
-			append = append->next;
-			continue;
+			// Skip spaces
+			if(append->next->IsBlank())
+			{
+				append = append->next;
+				continue;
+			}
+
+			if(Token::Compare(append->next, ';', L';') == true)
+				append = append->next;
+
+			break;
 		}
-
-		if(Token::Compare(append->next, ';', L';') == true)
-			append = append->next;
-
-		break;
 	}
 
 	if(append == NULL)
 		append = _spl_last_declare;
 
 	return append;
+}
+
+// Add RETURN statements for REFCURSORs
+void SqlParser::AddReturnRefcursors(Token *end)
+{
+	if(!Source(SQL_ORACLE) || !Target(SQL_POSTGRESQL) || _spl_refcursor_params_num == 0 || end == NULL)
+		return;
+
+	// Iterate REFCURSORS parameters and add RETURN statement
+	for(ListwItem *i = _spl_refcursor_params.GetFirst(); i != NULL; i = i->next)
+	{
+		Token *cursor = (Token*)i->value;
+
+		PREPEND(end, "RETURN ");
+
+		if(_spl_refcursor_params_num > 1)
+			PREPEND(end, "NEXT ");
+
+		PrependCopy(end, cursor);
+		PREPEND(end, ";\n");
+	}
+}
+
+// Add variable declarations generated in the procedural block
+void SqlParser::AddGeneratedVariables()
+{
+	// Add not hound handler that must go after all variables and cursors; and initialize not_found variable before second and subsequent OPEN cursors
+	if(_spl_need_not_found_handler && Target(SQL_MYSQL, SQL_MARIADB))
+	{
+		MySQLAddNotFoundHandler();
+		MySQLInitNotFoundBeforeOpen();
+	}
+
+	Token *format_ident = _declare_format;
+
+	// Oracle uses DECLARE block with the keyword at the beginning so use the variable name to define the indention
+	if(_source == SQL_ORACLE)
+	{
+		format_ident = _spl_last_outer_declare_varname;
+
+		// DECLARE is already added before the variable, so use prev token
+		if(_spl_last_outer_declare_varname != NULL && Target(SQL_SQL_SERVER))
+			format_ident = _spl_last_outer_declare_varname->prev;
+	}
+
+	Token *format = Nvl(_declare_format, _spl_outer_begin, _spl_outer_as);
+
+	// Dynamic SQL variable is used
+	if(_spl_dyn_sql_var)
+	{
+		// @sql for sp_executesql that does not allow expressions
+		if(_target == SQL_SQL_SERVER)
+		{
+			Token *append_var = _spl_last_outer_declare_var;
+
+			// sp_executesql requires unicode string
+			APPEND_FMT(append_var, "\n", format_ident);
+			APPEND_FMT(append_var, "DECLARE ", format);
+			APPEND_NOFMT(append_var, "@sql ");
+			APPEND_FMT(append_var, "NVARCHAR(max);", format);
+		}
+	}
+
+	// Row count variable needs to be added
+	if(_spl_need_rowcount_var)
+	{
+		if(_target == SQL_POSTGRESQL)
+		{
+			Token *append_var = GetDeclarationAppend();
+
+			APPEND_FMT(append_var, "\n", format_ident);
+			APPEND_NOFMT(append_var, "v_sqlrowcount ");
+			APPEND_FMT(append_var, "INT;", format);
+		}
+	}
 }
 
 // Clear all procedural lists, statuses
@@ -1168,6 +1479,8 @@ void SqlParser::ClearSplScope()
 	_spl_name = NULL;
 	_spl_start = NULL;
 	_spl_external = false;
+
+	_declare_format = NULL;
 	
 	// Delete variable and parameters
 	_spl_variables.DeleteAll();
@@ -1176,13 +1489,14 @@ void SqlParser::ClearSplScope()
 	// Clear statements clause scope
 	_scope.DeleteAll();
 
-	_spl_package = NULL;
-    _spl_outer_begin = NULL;
+	_spl_outer_begin = NULL;
 	_spl_outer_as = NULL;
     _spl_begin_blocks.DeleteAll();
 	_spl_last_declare = NULL;
 	_spl_first_non_declare = NULL;
     _spl_last_outer_declare_var = NULL;
+	_spl_last_outer_declare_varname = NULL;
+	_spl_current_stmt = NULL;
 	_spl_last_stmt = NULL;
 
 	_spl_new_correlation_name = NULL;
@@ -1191,6 +1505,9 @@ void SqlParser::ClearSplScope()
 	_spl_result_sets = 0;
 	_spl_result_set_cursors.DeleteAll();
 	_spl_result_set_generated_cursors.DeleteAll();
+
+	_spl_refcursor_params_num = 0;
+	_spl_refcursor_params.DeleteAll();
 	
 	_spl_delimiter_set = false;
 	_spl_user_exceptions.DeleteAll();
@@ -1198,12 +1515,23 @@ void SqlParser::ClearSplScope()
 	_spl_cursor_params.DeleteAll();
 	_spl_cursor_vars.DeleteAll();
 	_spl_declared_cursors.DeleteAll();
+	_spl_declared_cursors_using_vars.DeleteAll();
+	_spl_declared_cursors_stmts.DeleteAll();
 	_spl_updatable_current_of_cursors.DeleteAll();
 	_spl_declared_cursors_select.DeleteAll();
+	_spl_declared_cursors_select_first_exp.DeleteAll();
+	_spl_declared_cursors_select_exp.DeleteAll();
+
+	_spl_current_declaring_cursor = NULL;
+	_spl_current_declaring_cursor_uses_vars = false;
 
 	_spl_rowtype_vars.DeleteAll();
 	_spl_rowtype_fields.DeleteAll();
 	_spl_rowtype_fetches.DeleteAll();
+
+	_spl_implicit_rowtype_vars.DeleteAll();
+	_spl_implicit_rowtype_fields.DeleteAll();
+	_spl_implicit_rowtype_fetches.DeleteAll();
 
 	_spl_declared_local_tables.DeleteAll();
 	_spl_created_session_tables.DeleteAll();
@@ -1218,6 +1546,7 @@ void SqlParser::ClearSplScope()
 	_spl_returning_datatypes.DeleteAll();
 	_spl_return_with_resume = 0;
 	_spl_returning_end = NULL;
+	_spl_return_int = false;
 
 	_spl_foreach_num = 0;
 	_spl_moved_if_select = 0;
@@ -1244,8 +1573,11 @@ void SqlParser::ClearSplScope()
 	_spl_sp_calls.DeleteAll();
 
 	_spl_proc_to_func = false;
+	_spl_func_to_proc = false;
     _spl_not_found_handler = false;
 	_spl_need_not_found_handler = false;
+	_spl_need_rowcount_var = false;
+	_spl_dyn_sql_var = false;
 
 	_spl_monday_1 = false;   // means unknown from context
 
@@ -1379,4 +1711,30 @@ bool SqlParser::OpenWithReturnCursor(Token *name)
 	}
 
 	return exists;
+}
+
+// Check if it is specified to convert function to procedure
+bool SqlParser::IsFuncToProc(Token *name)
+{
+	if(name == NULL || name->str == NULL)
+		return false;
+
+	std::string sname(name->str, name->len);
+	std::transform(sname.begin(), sname.end(), sname.begin(), ::tolower);
+
+	StringMap::iterator i = _func_to_sp_map.find(sname);
+
+	if(i != _func_to_sp_map.end())
+     return true;
+
+	return false;
+}
+
+// Check if the conversion running in evaluation mode and add comment
+void SqlParser::AddEvalModeComment(Token *token)
+{
+	if(token == NULL || !_option_eval_mode)
+		return;
+
+	PREPEND_NOFMT(token, "-- SQLINES LICENSE FOR EVALUATION USE ONLY\n\n");
 }

@@ -35,7 +35,7 @@
 #elif defined(WIN32)
 #define DB2_DLL				"db2cli.dll"
 #else
-#define DB2_DLL				"db2cli"
+#define DB2_DLL				"libdb2.so"
 #endif
 
 #define DB2_DLL_LOAD_ERROR	        "Loading IBM DB2 CLI " DB2_DLL 

@@ -227,6 +227,22 @@ public:
 		return last;
 	}
 
+	// Get Nth value
+	ListwmItem* GetNth(int n)
+	{
+		int k = 0;
+
+		for(ListwmItem* i = first; i != NULL; i = i->next)
+		{
+			if(k == n)
+				return i;
+
+			k++;
+		}		
+
+		return NULL;
+	}
+
 	// Get the total number of items in the list
 	int GetCount() 
 	{ 

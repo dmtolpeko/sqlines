@@ -42,10 +42,6 @@ SqlOciApi::SqlOciApi()
 	_stmtp_cursor = NULL;
 	_stmtp_insert = NULL;
 
-	_user[0] = '\x0';
-	_pwd[0] = '\x0';
-	_db[0] = '\x0';
-
 	_charset_id = 0;
 
 	_ociArrayDescriptorAlloc = NULL;
@@ -87,9 +83,16 @@ int SqlOciApi::Init()
 
 	const char *oci_lib_param = (_parameters != NULL) ? _parameters->Get("-oci_lib") : NULL;
 	const char *oci_lib = (oci_lib_param != NULL)? oci_lib_param : OCI_DLL; 
+	const char *nls_lang = NULL;
+	
+	if(_parameters != NULL)
+		nls_lang = _parameters->Get("-oracle_nls_lang");
 
 #if defined(WIN32) || defined(WIN64)
 
+	if(nls_lang != NULL)
+		_putenv((std::string("NLS_LANG=") + nls_lang).c_str()); 
+	else
 	// Force UTF-8 codepage at the client side if the target loader supports it
 	if(_target_api_provider != NULL && _target_api_provider->IsTargetUtf8LoadSupported())
 		_putenv("NLS_LANG=American_America.AL32UTF8");
@@ -210,36 +213,7 @@ int SqlOciApi::Init()
 // Set the connection string in the API object
 void SqlOciApi::SetConnectionString(const char *conn)
 {
-	if(conn == NULL)
-		return;
-
-	// Find @ that separates user/password from tnsname or host:port/sid
-	const char *amp = strchr(conn, '@');
-	const char *sl = strchr(conn, '/');
-
-	// Set server info
-	if(amp != NULL)
-		strcpy(_db, amp + 1); 
-
-	if(amp == NULL)
-		amp = conn + strlen(conn);
-
-	// Define the end of the user name
-	const char *end = (sl == NULL || amp < sl) ? amp : sl;
-
-	strncpy(_user, conn, (size_t)(end - conn));
-	_user[end - conn] = '\x0';
-
-	// Define password
-	if(sl != NULL && amp > sl)
-	{
-		strncpy(_pwd, sl + 1, (size_t)(amp - sl - 1));
-		_pwd[amp - sl - 1] = '\x0';
-	}
-	else
-		*_pwd = '\x0';
-
-	return;
+	SplitConnectionString(conn, _user, _pwd, _db);
 }
 
 // Connect to the database
@@ -271,7 +245,7 @@ int SqlOciApi::Connect(size_t *time_spent)
 	if(rc < 0)
 		return rc;
                    
-	rc = _ociServerAttach(_srvhp, _errhp, (text*)_db, (sb4)strlen(_db), 0);
+	rc = _ociServerAttach(_srvhp, _errhp, (text*)_db.c_str(), (sb4)_db.length(), 0);
 
 	if(rc < 0)
 	{
@@ -294,8 +268,8 @@ int SqlOciApi::Connect(size_t *time_spent)
 		return rc;
 
 	// Set login information
-	rc = _ociAttrSet(_authp, OCI_HTYPE_SESSION, _user, (ub4)strlen(_user), OCI_ATTR_USERNAME, _errhp);
-	rc = _ociAttrSet(_authp, OCI_HTYPE_SESSION, _pwd, (ub4)strlen(_pwd), OCI_ATTR_PASSWORD, _errhp);
+	rc = _ociAttrSet(_authp, OCI_HTYPE_SESSION, (void*)_user.c_str(), (ub4)_user.length(), OCI_ATTR_USERNAME, _errhp);
+	rc = _ociAttrSet(_authp, OCI_HTYPE_SESSION, (void*)_pwd.c_str(), (ub4)_pwd.length(), OCI_ATTR_PASSWORD, _errhp);
 
 	rc = _ociSessionBegin(_svchp, _errhp, _authp, OCI_CRED_RDBMS, OCI_DEFAULT);
 
@@ -557,9 +531,21 @@ int SqlOciApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 			    _cursor_lob_exists = true;
             }
 		}
-
+		else
 		// For LONG data type, 0 size is returned
 		if(_cursor_cols[i]._native_dt == SQLT_LNG)
+        {
+            if(_cursor_fetch_lob_as_varchar)
+            {
+                _bind_long_inplace = 32000;
+                _cursor_cols[i]._len = _bind_long_inplace;
+            }
+            else
+			    _cursor_cols[i]._len = 4000;
+        }
+		else
+		// Object type including XMLTYPE
+		if(_cursor_cols[i]._native_dt == SQLT_NTY)
         {
             if(_cursor_fetch_lob_as_varchar)
             {
@@ -715,6 +701,14 @@ int SqlOciApi::OpenCursor(const char *query, size_t buffer_rows, int buffer_memo
 				_cursor_cols[i]._fetch_len = (size_t)_bind_long_inplace;
 				_cursor_cols[i]._data = new char[_bind_long_inplace * _cursor_allocated_rows];
 			}
+		}
+		else
+		// Object type
+		if(_cursor_cols[i]._native_dt == SQLT_NTY)
+		{
+			_cursor_cols[i]._native_fetch_dt = SQLT_STR;
+			_cursor_cols[i]._fetch_len = _cursor_cols[i]._len;
+			_cursor_cols[i]._data = new char[_cursor_cols[i]._fetch_len * _cursor_allocated_rows];
 		}
 		else
 		// ROWID data type 
@@ -953,7 +947,7 @@ int SqlOciApi::GetAvailableTables(std::string &select, std::string &exclude,
 	std::string condition;
 
 	// Get a condition to select objects from the catalog
-	GetSelectionCriteria(select.c_str(), exclude.c_str(), "owner", "table_name", condition, _user, true);
+	GetSelectionCriteria(select.c_str(), exclude.c_str(), "owner", "table_name", condition, _user.c_str(), true);
 
 	// Build the query
 	std::string query = "SELECT owner, table_name FROM all_tables WHERE";
@@ -1052,8 +1046,8 @@ int SqlOciApi::ReadSchema(const char *select, const char *exclude, bool read_cns
 	ClearSchema();
 
 	// Build WHERE clause to select rows from catalog
-	GetSelectionCriteria(select, exclude, "owner", "table_name", selection, _user, true);
-	GetSelectionCriteria(select, exclude, "table_owner", "table_name", selection2, _user, true);
+	GetSelectionCriteria(select, exclude, "owner", "table_name", selection, _user.c_str(), true);
+	GetSelectionCriteria(select, exclude, "table_owner", "table_name", selection2, _user.c_str(), true);
 
 	// Exclude system and Oracle specific schemas if *.* condition is set
 	if(select != NULL && strcmp(select, "*.*") == 0 && selection.empty())
@@ -2486,6 +2480,9 @@ int SqlOciApi::ReadReservedWords()
 // Initialize the bulk copy from one database into another
 int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allocated_array_rows, SqlCol *s_cols, SqlCol ** /*t_cols*/)
 {
+	TRACE("OCI InitBulkTransfer() Entered");
+	TRACE_P("Target table: %s", table);
+
 	// Allocate statement handle
 	int rc = _ociHandleAlloc((dvoid*)_envhp, (dvoid**)&_stmtp_insert, OCI_HTYPE_STMT, 0, NULL);
 
@@ -2515,6 +2512,7 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 		_ociHandleFree(_stmtp_insert, OCI_HTYPE_STMT);
 
 		_stmtp_insert = NULL;
+		TRACE("OCI InitBulkTransfer() Left with Error");
 		return -1;
 	}
 
@@ -2546,6 +2544,7 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 
 		_ins_cols[i]._fetch_len = s_cols[i]._fetch_len;
 		_ins_cols[i]._lob = s_cols[i]._lob;
+		_ins_cols[i]._nchar = s_cols[i]._nchar;
 
         // Forward all Oracle data types
         if(_source_api_type == SQLDATA_ORACLE) 
@@ -2557,7 +2556,7 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 			// SQL Server, Informix, DB2 and Sybase ASA types fetched as CHAR
 			((_source_api_type == SQLDATA_SQL_SERVER || _source_api_type == SQLDATA_INFORMIX ||
 				_source_api_type == SQLDATA_DB2 || _source_api_type == SQLDATA_ASA)
-				&& s_cols[i]._native_fetch_dt == SQL_C_CHAR) ||
+				&& (s_cols[i]._native_fetch_dt == SQL_C_CHAR || s_cols[i]._native_fetch_dt == SQL_C_WCHAR)) ||
 			// MySQL data types bound to string except TEXT and BLOB
 			(_source_api_type == SQLDATA_MYSQL && s_cols[i]._lob == false))
 		{
@@ -2571,13 +2570,22 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 			// SQL Server, Informix, DB2 and Sybase ASA types fetched as BINARY
 			((_source_api_type == SQLDATA_SQL_SERVER || _source_api_type == SQLDATA_INFORMIX ||
 				_source_api_type == SQLDATA_DB2 || _source_api_type == SQLDATA_ASA)
-				&& s_cols[i]._native_fetch_dt == SQL_C_BINARY))
+				&& s_cols[i]._native_fetch_dt == SQL_C_BINARY) ||
+				// Sybase ASE BINARY
+				(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_BINARY_TYPE))
 		{
 			_ins_cols[i]._native_dt = SQLT_BIN;
  		}
 		else
-		// Sybase CHAR
-		if(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_CHAR_TYPE)
+		// Sybase CHAR and VARCHAR
+		if(_source_api_type == SQLDATA_SYBASE && (s_cols[i]._native_fetch_dt == CS_CHAR_TYPE || s_cols[i]._native_fetch_dt == CS_LONGCHAR_TYPE))
+		{
+			// Bind without terminating NULL (it required in case of SQLT_STR)
+			_ins_cols[i]._native_dt = SQLT_AFC;
+ 		}
+		else
+		// Sybase UNICHAR 
+		if(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_UNICHAR_TYPE)
 		{
 			// Bind without terminating NULL (it required in case of SQLT_STR)
 			_ins_cols[i]._native_dt = SQLT_AFC;
@@ -2642,12 +2650,39 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 
 			data = &_ins_cols[i]._data;
 		}
+		else
+		// Sybase INITEXT UTF-16
+		if(_source_api_type == SQLDATA_SYBASE && s_cols[i]._native_fetch_dt == CS_UNITEXT_TYPE)
+		{
+			_ins_cols[i]._native_dt = SQLT_CLOB;
+			_ins_cols[i]._fetch_len = 0;
+			_ins_cols[i]._lob = true;
+
+			// Use data field to store pointer to the LOB locator
+			rc = _ociDescriptorAlloc(_envhp, (void**)&_ins_cols[i]._data, OCI_DTYPE_LOB, 0, NULL);
+
+			// Temporary LOB for inserting data
+			rc = _ociLobCreateTemporary(_svchp, _errhp, (OCILobLocator*)_ins_cols[i]._data, 0, SQLCS_NCHAR, 
+					OCI_TEMP_CLOB, OCI_ATTR_NOCACHE, OCI_DURATION_SESSION);
+
+			data = &_ins_cols[i]._data;
+ 		}
 
 		OCIBind *bindpp = NULL;
 
 		// Bind the column
 		rc = _ociBindByPos(_stmtp_insert, &bindpp, _errhp, (ub4)(i + 1), data, (sb4)_ins_cols[i]._fetch_len, 
 				(ub2)_ins_cols[i]._native_dt, ind, (ub2*)_ins_cols[i]._len_ind2, NULL, 0, NULL, OCI_DEFAULT);
+
+		// Data extracted in UTF-16
+		if(_ins_cols[i]._nchar)
+		{
+			ub1 cform = SQLCS_NCHAR;
+			ub2 csid = OCI_UTF16ID;
+
+			rc = _ociAttrSet(bindpp, OCI_HTYPE_BIND, (void*)&cform, 0, OCI_ATTR_CHARSET_FORM, _errhp);
+			rc = _ociAttrSet(bindpp, OCI_HTYPE_BIND, (void *)&csid, 0, OCI_ATTR_CHARSET_ID, _errhp);
+		}
 
 		if(rc == -1)
 		{
@@ -2661,10 +2696,12 @@ int SqlOciApi::InitBulkTransfer(const char *table, size_t col_count, size_t allo
 			_ins_cols[i]._len_ind2 = NULL;
 
 			_stmtp_insert = NULL;
+			TRACE("OCI InitBulkTransfer() Left with Error");
 			return -1;
 		}
 	}
 
+	TRACE("OCI InitBulkTransfer() Left");
 	return rc;
 }
 
@@ -2762,6 +2799,16 @@ int SqlOciApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 				_ins_cols[k]._ind2[i] = 0;
 				_ins_cols[k]._len_ind2[i] = (short)ins_len;
 			}
+			// Sybase ASE DATE fetched as full 26 byte timestamp string and must be truncated to Oracle DATE length
+			// otherwise Oracle returns "ORA-01830: date format picture ends before converting entire input string"
+			else
+			if(_source_api_type == SQLDATA_SYBASE && s_cols[k]._native_dt == CS_DATE_TYPE)
+			{
+				short len = _ins_cols[k]._len_ind2[i];
+
+				if(len == 26)
+					_ins_cols[k]._len_ind2[i] = 19;
+			}
 			else
 			// LOB column
 			if(_source_api_type != SQLDATA_ORACLE && s_cols[k]._lob == true && _ins_cols[k]._ind2[i] != -1)
@@ -2827,6 +2874,15 @@ int SqlOciApi::TransferRows(SqlCol *s_cols, int rows_fetched, int *rows_written,
 				}
 
 				bytes += lob_size;
+			}
+			else
+			// Correct the size for UTF-16 data since buffer in bytes while Oracle OCI requires size in characters
+			if(_ins_cols[k]._nchar)
+			{
+				short len = _ins_cols[k]._len_ind2[i];
+
+				if(len > 2 && len % 2 == 0)
+					_ins_cols[k]._len_ind2[i] = len/2;
 			}
 		}
 	}

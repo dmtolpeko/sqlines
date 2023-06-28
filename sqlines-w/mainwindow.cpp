@@ -379,6 +379,7 @@ QStringList MainWindow::getSourceTargetList()
     QStringList typesList;
 
     typesList.append("Greenplum");
+    typesList.append("Hive");
     typesList.append("IBM DB2");
     typesList.append("Informix");
     typesList.append("MariaDB");
@@ -388,7 +389,8 @@ QStringList MainWindow::getSourceTargetList()
     typesList.append("Netezza");
     typesList.append("PostgreSQL");
     typesList.append("Sybase ASE");
-    typesList.append("Sybase SQL Anywhere");    
+    typesList.append("Sybase SQL Anywhere");
+    typesList.append("Sybase Advantage");
     typesList.append("Teradata");
     typesList.append("EsgynDB");
 
@@ -415,6 +417,9 @@ QString MainWindow::getCmdType(QString type)
     if(type == "Sybase SQL Anywhere")
         cmd = "asa";
     else
+    if(type == "Sybase Advantage")
+        cmd = "ads";
+    else
     if(type == "Informix")
         cmd = "informix";
     else
@@ -435,6 +440,9 @@ QString MainWindow::getCmdType(QString type)
     else
     if(type == "Netezza")
         cmd = "netezza";
+    else
+    if(type == "Hive")
+        cmd = "hive";
     else
     if(type == "EsgynDB")
         cmd = "esgyndb";

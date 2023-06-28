@@ -86,9 +86,9 @@ class SqlOciApi : public SqlApiBase
 	OCIStmt *_stmtp_insert;
 
 	// Connection information
-	char _user[256];
-	char _pwd[256];
-	char _db[256];
+	std::string _user;
+	std::string _pwd;
+	std::string _db;
 
 	// Character set ID (873 - AL32UTF8)
 	ub2 _charset_id;

@@ -103,6 +103,44 @@ bool SqlParser::SelectNextvalFromDual(Token **sequence, Token **column)
 	return exists;
 }
 
+// Patterns in (SELECT ...) expression
+bool SqlParser::ParseSelectExpressionPattern(Token *open, Token *select)
+{
+	if(open == NULL || select == NULL)
+		return false;
+
+	bool exists = false;
+
+	// Sybase ADS procedure parameters (SELECT param FROM __input)
+	if(_source == SQL_SYBASE_ADS && _spl_scope == SQL_SCOPE_PROC)
+	{
+		Token *param = GetNext();
+		Token *declared_param = (param != NULL) ? GetParameter(param) : NULL;
+		
+		if(declared_param != NULL)
+		{
+			Token *from = TOKEN_GETNEXTW("FROM");
+			Token *input = (from != NULL)? TOKEN_GETNEXTW("__INPUT") : NULL;
+			Token *close = (input != NULL)? TOKEN_GETNEXT(')') : NULL;
+
+			// Pattern matched
+			if(close != NULL)
+			{
+				// Leave only parameter name
+				if(_target != SQL_SYBASE_ADS)
+				{
+					PrependCopy(open, declared_param);
+					Token::Remove(open, close);
+				}
+
+				exists = true;
+			}
+		}
+	}
+
+	return exists;
+}
+
 // PostgreSQL CAST(TIMEOFDAY() AS TIMESTAMP) that returns current date and time
 bool SqlParser::ParseCastTimeofdayAsTimestamp(Token *cast, Token *open, Token *first)
 {
